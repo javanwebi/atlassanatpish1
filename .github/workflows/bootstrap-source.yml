@@ -1,0 +1,27 @@
+name: Import complete Sanat Pish source
+on:
+  push:
+    paths:
+      - '.github/workflows/bootstrap-source.yml'
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Copy reviewed source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --single-branch --branch database/supabase-migration https://github.com/javanwebi/ATLAS2.git /tmp/sanatpish-source
+          test "$(git -C /tmp/sanatpish-source rev-parse HEAD)" = "265873c58711bcfc4e8c8b2974e50e394a9b7176"
+          git -C /tmp/sanatpish-source archive HEAD | tar --exclude='.github/workflows/*' -xf - -C "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "Import complete reviewed Sanat Pish source and Supabase integration"
+          git push origin HEAD:main
