@@ -1,4 +1,4 @@
-import {durableStorage} from "./durableStorage";
+import {durableStorage,databaseStorageEnabled} from "./durableStorage";
 import { persistPortalCache } from "./portalRepository";
 import { Customer } from "../types";
 
@@ -530,7 +530,7 @@ export const portalContentService = {
         if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return DEFAULT_BANNERS;
+    return databaseStorageEnabled()?[]:DEFAULT_BANNERS;
   },
 
   getBannersForCustomer(
@@ -591,7 +591,7 @@ export const portalContentService = {
         if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return DEFAULT_ANNOUNCEMENTS;
+    return databaseStorageEnabled()?[]:DEFAULT_ANNOUNCEMENTS;
   },
 
   getAnnouncementsForCustomer(
@@ -640,6 +640,7 @@ export const portalContentService = {
         if (Array.isArray(parsed?.[portal])) return parsed[portal];
       }
     } catch {}
+    if(databaseStorageEnabled())return [];
     // Independent consumer milestones never inherit wholesale discounts or rewards.
     return portal === "consumer"
       ? DEFAULT_CONSUMER_CLUB_MILESTONES

@@ -17,14 +17,22 @@ export async function readAdoptedDocument(client:SqlClient,key:string,scope:stri
  const source=scope==='global'?projections[key]:undefined;
  if(source){
   const filter=key==='atlas_admin_banners_v1'?" where scope='storefront'":key==='atlas_portal_content_banners_v1'?" where scope<>'storefront'":key==='atlas_legacy_customers_v1'?' where is_legacy=true':'';
-  const data=(await client.query(`select * from public.${source.table}${filter} order by ${source.pk || 'id'}`)).rows;
+  const archived=(await client.query('select value from public.portal_kv_store where key=$1',['domain_tombstones/'+key])).rows[0]?.value || [];
+  const hidden=new Set(Array.isArray(archived)?archived.map(String):[]);
+  const data=(await client.query(`select * from public.${source.table}${filter} order by ${source.pk || 'id'}`)).rows.filter(row=>!hidden.has(String(row[source.pk || 'id'])));
   if(source.table==='portal_layout_configs')return Object.fromEntries(data.map(row=>[row.portal_key,row.config]));
   const compatibility=(await client.query('select value from public.portal_kv_store where key=$1',[key])).rows[0]?.value;
   const previous=Array.isArray(compatibility)?compatibility:[];
   // Preserve unknown legacy fields, but known table columns always win; deleted table rows stay absent.
   const pk=source.pk || 'id',property=source.aliases?.[pk] || camel(pk);
   const extras=new Map(previous.map((entry:Row)=>[String(entry[property]),entry]));
-  return data.map(row=>({...extras.get(String(row[pk])),...decode(row,source)}));
+  const decoded=data.map(row=>({...extras.get(String(row[pk])),...decode(row,source)}));
+  if(source.table==='club_milestones'){
+   // A legacy unscoped row is wholesale only. Never copy wholesale rewards into consumer rules.
+   const consumer=decoded.filter(row=>row.portal==='consumer'),high_volume=decoded.filter(row=>row.portal!=='consumer');
+   return {consumer,high_volume};
+  }
+  return decoded;
  }
  const row=scope==='global'?(await client.query('select value from public.portal_kv_store where key=$1',[key])).rows[0]:(await client.query('select value from app_private.scoped_documents where namespace=$1 and scope_id=$2',[key,scope])).rows[0];
  return row?.value;
@@ -60,10 +68,19 @@ async function projectDocument(client:SqlClient,key:string,value:unknown){
   const v=value as Row;await client.query('update public.system_settings set payment_gateway=$1,sms_provider=$2,shipping_methods=$3,currency=$4,seo=$5,raw_settings=$6 where id=(select id from public.system_settings order by id limit 1)',[v.paymentGateway,v.smsProvider,v.shippingMethods,v.currency,v.seo,JSON.stringify(v)]);return;
  }
  const source=projections[key];if(!source)return;
+ if(source.table==='club_milestones' && value && typeof value==='object' && !Array.isArray(value))value=Object.entries(value).flatMap(([portal,rows])=>Array.isArray(rows)?rows.map(entry=>({...entry,portal,id:String(entry.id).startsWith(portal+':')?entry.id:portal+':'+entry.id})):[]);
  if(source.table==='portal_layout_configs' && value && typeof value==='object' && !Array.isArray(value))value=Object.entries(value).map(([portal,config])=>({portal,config}));
  if(!Array.isArray(value))return;
  const columns=(await client.query("select column_name,data_type from information_schema.columns where table_schema='public' and table_name=$1 order by ordinal_position",[source.table])).rows;
  const pk=source.pk || 'id';
+ const property=source.aliases?.[pk] || camel(pk);
+ const incoming=new Set(value.map(entry=>String(entry?.[property])));
+ const filter=key==='atlas_admin_banners_v1'?" where scope='storefront'":key==='atlas_portal_content_banners_v1'?" where scope<>'storefront'":key==='atlas_legacy_customers_v1'?' where is_legacy=true':'';
+ const existing=(await client.query(`select ${pk} from public.${source.table}${filter}`)).rows;
+ const previous=(await client.query('select value from public.portal_kv_store where key=$1',['domain_tombstones/'+key])).rows[0]?.value || [];
+ const hidden=[...new Set([...(Array.isArray(previous)?previous:[]),...existing.map(row=>String(row[pk]))])].filter(id=>!incoming.has(String(id)));
+ // Logical removals preserve original rows and history. New table rows remain discoverable.
+ await client.query('insert into public.portal_kv_store(key,value) values($1,$2) on conflict(key) do update set value=excluded.value,updated_at=now()',['domain_tombstones/'+key,JSON.stringify(hidden)]);
  for(const entry of value){
   if(!entry || typeof entry!=='object')throw new Error('Invalid document record');
   const row:Row={...source.defaults};

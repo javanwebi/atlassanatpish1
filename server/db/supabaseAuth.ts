@@ -63,7 +63,7 @@ export async function supabaseAuthAction(req:IncomingMessage,res:ServerResponse,
   const pending=(await database().query("select id,payload from app_private.auth_provisioning where id=$1 and phone=$2 and status='pending' and created_at>now()-interval '30 minutes'",[draftId,local])).rows[0];
   if(pending){
    const p=pending.payload;
-   await database().query('update public.user_profiles set full_name=$2,company_name=$3,province=$4,city=$5,preferences=preferences || $6::jsonb where id=$1 and username is null',[session.user.id,p.fullName,p.companyName,p.province,p.city,JSON.stringify(p)]);
+   await database().query(`update public.user_profiles set full_name=$2,company_name=$3,province=$4,city=$5,preferences=preferences || $6::jsonb,email=coalesce(nullif($7,''),email) where id=$1 and username is null`,[session.user.id,p.fullName,p.companyName,p.province,p.city,JSON.stringify(p),p.email]);
    await database().query("update app_private.auth_provisioning set status='linked' where id=$1",[pending.id]);
   }
  }

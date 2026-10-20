@@ -1,4 +1,4 @@
-import {durableStorage} from "./durableStorage";
+import {durableStorage,databaseStorageEnabled} from "./durableStorage";
 import { persistPortalCache } from './portalRepository';
 import * as XLSX from 'xlsx';
 import { ClubTier, Customer, Product } from '../types';
@@ -321,6 +321,7 @@ export const pricingCreditService = {
     } catch {
       // ignore
     }
+    if(databaseStorageEnabled())return [];
     this.saveGrades(INITIAL_GRADES);
     return INITIAL_GRADES;
   },
@@ -372,6 +373,7 @@ export const pricingCreditService = {
       // ignore
     }
     if (!lists) {
+      if(databaseStorageEnabled())return [];
       lists = INITIAL_PRICE_LISTS;
       this.savePriceLists(lists);
     }
@@ -995,6 +997,7 @@ export const pricingCreditService = {
     } catch {
       // ignore
     }
+    if(databaseStorageEnabled())return [];
     this.savePriceListHistory(INITIAL_PRICE_LIST_HISTORY);
     return INITIAL_PRICE_LIST_HISTORY.map(h => ({
       ...h,
@@ -1149,6 +1152,7 @@ export const pricingCreditService = {
         return pl;
       }
     }
+    if(!lists.length && databaseStorageEnabled())throw new Error('لیست قیمت در دیتابیس تعریف نشده است.');
     return lists[lists.length - 1] || INITIAL_PRICE_LISTS[3];
   },
 
@@ -1424,9 +1428,10 @@ export const pricingCreditService = {
     }
 
     if (!targetPriceList) {
-      targetPriceList = this.getPriceLists().find(p => p.isDefault) || INITIAL_PRICE_LISTS[3];
+      targetPriceList = this.getPriceLists().find(p => p.isDefault) || (databaseStorageEnabled()?undefined:INITIAL_PRICE_LISTS[3]);
     }
 
+    if(!targetPriceList)return null;
     const customMap = targetPriceList.customProductPrices || {};
     const strippedCode = normalizeSkuCodeKey(lookupCode);
     const exactSkuPrice =

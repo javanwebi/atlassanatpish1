@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  portalContentService as cms,
+  portalContentService as cms, DEFAULT_CLUB_MILESTONES, DEFAULT_CONSUMER_CLUB_MILESTONES,
   type PortalBannerItem,
 } from "../src/services/portalContentService";
 import type { Customer } from "../src/types";
 import {durableStorage,refreshDurableStorage} from '../src/services/durableStorage';
-globalThis.fetch=async()=>new Response(JSON.stringify({success:true,database:true,values:{},versions:{},products:[]}));
+globalThis.fetch=async()=>new Response(JSON.stringify({success:true,database:true,values:{atlas_portal_club_milestones_v1:{high_volume:DEFAULT_CLUB_MILESTONES,consumer:DEFAULT_CONSUMER_CLUB_MILESTONES}},versions:{},products:[]}));
 Object.defineProperty(globalThis, "window", { value: new EventTarget() });
 const user = {
   id: "one",

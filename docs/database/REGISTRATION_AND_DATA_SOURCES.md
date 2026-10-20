@@ -16,9 +16,11 @@ No additional migration is necessary for these changes: `user_profiles.preferenc
 
 - Profiles are read from `public.user_profiles`; known profile preferences are saved there. Active addresses are read from `public.user_addresses`. New Auth-linked profile edits no longer create duplicate private user documents. Historical private records remain preserved.
 - Mapped domains (categories, brands, pages, articles, CRM, price lists, rewards, banners, announcements and layouts) are read from their own existing tables, ahead of old compatibility JSON. Compatibility writes still retain an archive and update typed tables transactionally.
+- Legacy direct category/brand array imports are replaced in place from database hydration at boot and on subsequent refreshes, so existing pages and menus receive the same canonical data.
 - Runtime hydration discovers mapped tables even without a document-version record, fixing hidden fallback to static category/brand lists. Categories expose their stored metadata tree; brand DTOs expose stored logos and names.
 - Club configuration and system settings use their existing tables. Admin-only system settings are not part of the public runtime allowlist.
 - The durable browser adapter has no localStorage fallback. Before initialization it cannot persist business data. Database failures remain errors.
+- Logical removals keep original table rows and a PostgreSQL tombstone ledger; removed content is not resurrected from compatibility JSON. Consumer and wholesale milestones are stored separately using the existing milestone payload. Static price-list and reward fallbacks are disabled in database mode.
 - Historical source JSON and compatibility archives have not been deleted. Static icons, fonts, CSS, route definitions and presentation assets are application code/assets, not a business database.
 
 ## Remaining gates — do not call the full migration finished
