@@ -360,8 +360,11 @@ app.use(
 );
 
 // Health Check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  res.setHeader('Cache-Control','no-store');
+  try{if(databaseEnabled())await database().query('select 1');
+  res.json({ status: 'ok', database:databaseEnabled()?'ok':'legacy', time: new Date().toISOString() });
+  }catch{return res.status(503).json({status:'unavailable',database:'unavailable'});}
 });
 
 // Catalog Source Endpoint: real warehouse inventory and explicitly scoped photo links.
