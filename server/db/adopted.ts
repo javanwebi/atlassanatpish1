@@ -1,0 +1,116 @@
+import {createHash} from 'node:crypto';
+import type {SqlClient} from './connection';
+import {adoptedOrders} from './adoptedCheckout';
+type Row=Record<string,any>;
+const sha=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const camel=(key:string)=>key.replace(/_([a-z])/g,(_,c)=>c.toUpperCase());
+const safePayload=(user:Row)=>{const {password,passwordHash,passwordSalt,...safe}=user;return safe;};
+export const toman=(value:unknown,currency:string)=>Number(value || 0)/(currency==='IRR'?10:1);
+const roles:Row={client:'retail',club:'wholesale',agency:'dealer',super_admin:'admin'};
+export async function readAdoptedDocument(client:SqlClient,key:string,scope:string){
+ if(scope==='global' && key==='atlas_admin_orders_v1')return adoptedOrders(client);
+ const row=scope==='global'?(await client.query('select value from public.portal_kv_store where key=$1',[key])).rows[0]:(await client.query('select value from app_private.scoped_documents where namespace=$1 and scope_id=$2',[key,scope])).rows[0];
+ if(row)return row.value;
+ if(key==='catalogue/base')return readAdoptedProducts(client);
+ if(key==='catalog_overrides/runtime')return (await client.query("select value from public.portal_kv_store where key='catalog_overrides_db_v1'")).rows[0]?.value;
+ const source=projections[key];if(!source)return undefined;
+ const data=(await client.query(`select * from public.${source.table} order by ${source.pk || 'id'}`)).rows;
+ if(source.table==='portal_layout_configs')return Object.fromEntries(data.map(row=>[row.portal_key,row.config]));
+ return data.map(row=>decode(row,source));
+}
+type Projection={table:string;pk?:string;aliases?:Record<string,string>;defaults?:Row};
+/** Documents preserve the original UI contract; typed tables are updated in the same transaction. */
+const projections:Record<string,Projection>={
+ atlas_admin_customers_v1:{table:'crm_customers',aliases:{company:'companyName',name:'name',grade_code:'tierCode'}},
+ atlas_legacy_customers_v1:{table:'crm_customers',aliases:{company:'companyName',grade_code:'tierCode'},defaults:{is_legacy:true}},
+ atlas_admin_inquiries_v1:{table:'price_inquiries',aliases:{crm_customer_id:'customerId',quoted_unit_price:'quotedPrice'}},
+ atlas_price_lists_v2:{table:'price_lists'},atlas_price_list_history_v2:{table:'price_change_history'},
+ atlas_customer_grades_v2:{table:'customer_grade_configs',pk:'grade_code',aliases:{grade_code:'code',min_purchase_volume:'minPurchase'}},
+ atlas_club_rewards_v2:{table:'club_rewards'},atlas_customer_reward_assignments_v1:{table:'customer_reward_assignments'},
+ atlas_portal_content_banners_v1:{table:'portal_banners',aliases:{image_url:'imageUrl',link_url:'link',scope:'portal'}},
+ atlas_admin_banners_v1:{table:'portal_banners',defaults:{scope:'storefront'},aliases:{image_url:'image',link_url:'link'}},
+ atlas_portal_content_announcements_v1:{table:'portal_announcements'},atlas_portal_club_milestones_v1:{table:'club_milestones'},
+ atlas_portal_layout_configs_v1:{table:'portal_layout_configs',pk:'portal_key',aliases:{portal_key:'portal'}},
+ atlas_admin_categories_v1:{table:'catalog_categories',aliases:{image_url:'image',is_active:'active'}},atlas_admin_brands_v1:{table:'catalog_brands',aliases:{logo_url:'logo',is_featured:'featured'}},
+ atlas_clients_logos_v3_moshtari:{table:'client_logos',aliases:{logo_url:'logo'}},
+ atlas_admin_blog_v1:{table:'blog_posts',aliases:{image_url:'image',published_at:'date'}},
+ atlas_admin_pages_v1:{table:'static_pages',aliases:{last_updated:'lastUpdated'}},
+ atlas_admin_sms_templates_v1:{table:'sms_templates',aliases:{event_key:'event'}},
+ atlas_admin_discounts_v1:{table:'discount_codes'},atlas_admin_campaigns_v1:{table:'marketing_campaigns'},
+ atlas_admin_tickets_v1:{table:'support_tickets'},atlas_admin_audit_logs_v1:{table:'audit_logs',aliases:{timestamp_label:'timestamp'}},
+};
+function decode(row:Row,source:Projection){const result:Row={...(row.raw_payload || {})};for(const [key,value] of Object.entries(row))if(!['raw_payload','created_at','updated_at'].includes(key))result[source.aliases?.[key] || camel(key)]=value;return result;}
+async function projectDocument(client:SqlClient,key:string,value:unknown){
+ const source=projections[key];if(!source)return;
+ if(source.table==='portal_layout_configs' && value && typeof value==='object' && !Array.isArray(value))value=Object.entries(value).map(([portal,config])=>({portal,config}));
+ if(!Array.isArray(value))return;
+ const columns=(await client.query("select column_name,data_type from information_schema.columns where table_schema='public' and table_name=$1 order by ordinal_position",[source.table])).rows;
+ const pk=source.pk || 'id';
+ for(const entry of value){
+  if(!entry || typeof entry!=='object')throw new Error('Invalid document record');
+  const row:Row={...source.defaults};
+  for(const column of columns){const name=column.column_name;if(['created_at','updated_at','auth_user_id','user_id'].includes(name))continue;const property=source.aliases?.[name] || camel(name);if(Object.hasOwn(entry,property))row[name]=entry[property];}
+  if(columns.some(c=>c.column_name==='raw_payload'))row.raw_payload=entry;
+  if(row[pk]==null)throw new Error(`Missing ${pk} for ${key}`);
+  const names=Object.keys(row);const assignments=names.filter(n=>n!==pk).map(n=>`"${n}"=excluded."${n}"`).join(',');
+  // Identifiers originate exclusively in the fixed projection map and database metadata.
+  await client.query(`insert into public.${source.table}(${names.map(n=>`"${n}"`).join(',')}) select ${names.map(n=>`"${n}"`).join(',')} from jsonb_populate_record(null::public.${source.table},$1::jsonb) on conflict("${pk}") do ${assignments?'update set '+assignments:'nothing'}`,[JSON.stringify(row)]);
+ }
+}
+export async function writeAdoptedDocument(client:SqlClient,key:string,value:unknown,scope:string){
+ await client.query('select pg_advisory_xact_lock(hashtextextended($1,0))',[scope+':'+key]);
+ const digest=sha(value),old=(await client.query('select content_sha256 from app_private.document_versions where namespace=$1 and scope_id=$2 for update',[key,scope])).rows[0];if(old?.content_sha256===digest)return;
+ const previous=await readAdoptedDocument(client,key,scope);
+ if(previous!==undefined && sha(previous)===digest){await client.query('update app_private.document_versions set content_sha256=$3 where namespace=$1 and scope_id=$2',[key,scope,digest]);return;}
+ if(previous!==undefined)await client.query('insert into app_private.source_archives(source_path,sha256,payload) values($1,$2,$3) on conflict do nothing',[`history/${scope}/${key}`,sha(previous),JSON.stringify(previous)]);
+ if(scope==='global'){
+  if(key==='atlas_admin_orders_v1'){
+   if(!Array.isArray(value))throw new Error('Invalid orders document');
+   for(const order of value){const status=({registered:'pending',processing:'confirmed',shipped:'shipped',delivered:'delivered',cancelled:'cancelled'} as Row)[order.status];if(!status)throw new Error('Invalid order status');
+    const existing=(await client.query('select status from public.orders where id=$1 for update',[order.id])).rows[0];if(!existing)throw new Error('Orders must be created through authoritative checkout');
+    if(existing.status!==status){await client.query('update public.orders set status=$2,carrier=$3,tracking_number=$4 where id=$1',[order.id,status,order.carrier || null,order.trackingNumber || null]);await client.query('insert into public.order_status_events(order_id,from_status,to_status,note) values($1,$2,$3,$4)',[order.id,existing.status,status,'Administrator status change']);}
+   }
+  }
+  await projectDocument(client,key,value);
+  await client.query('insert into public.portal_kv_store(key,value) values($1,$2) on conflict(key) do update set value=excluded.value,updated_at=now()',[key,JSON.stringify(value)]);
+ }else await client.query('insert into app_private.scoped_documents(namespace,scope_id,value) values($1,$2,$3) on conflict(namespace,scope_id) do update set value=excluded.value',[key,scope,JSON.stringify(value)]);
+ const kind=Array.isArray(value)?'array':value && typeof value==='object'?'object':'scalar';
+ await client.query('insert into app_private.document_versions(namespace,scope_id,version,value_kind,content_sha256) values($1,$2,1,$3,$4) on conflict(namespace,scope_id) do update set version=document_versions.version+1,value_kind=excluded.value_kind,content_sha256=excluded.content_sha256,updated_at=now()',[key,scope,kind,digest]);
+}
+export async function adoptedUsers(client:SqlClient){
+ const drafts=(await client.query('select id,payload,auth_user_id,active from app_private.portal_users')).rows;
+ const profiles=(await client.query('select * from public.user_profiles')).rows;
+ return profiles.map(p=>{const draft=drafts.find(d=>d.auth_user_id===p.id || d.id===p.legacy_user_id);return {...(draft?.payload || {}),id:draft?.id || p.legacy_user_id || p.id,authUserId:p.id,phone:p.phone?.replace(/^\+98/,'0'),email:p.email,username:p.username,fullName:p.full_name,companyName:p.company_name,role:roles[p.role] || 'guest',active:p.status==='active' && draft?.active!==false,approvedB2B:p.approved_b2b,canViewPrices:p.can_view_prices,canViewStock:p.can_view_stock,creditLimit:Number(p.credit_limit),creditUsed:Number(p.credit_used),walletBalance:Number(p.wallet_balance),clubPoints:p.club_points};});
+}
+export async function persistAdoptedUsers(client:SqlClient,users:Row[]){
+ // No missing user is deleted or deactivated by a stale whole-document save.
+ for(const user of users){
+  const safe=safePayload(user);
+  await client.query('insert into app_private.portal_users(id,auth_user_id,payload) values($1,$2,$3) on conflict(id) do update set auth_user_id=coalesce(excluded.auth_user_id,portal_users.auth_user_id),payload=excluded.payload',[user.id,user.authUserId || null,JSON.stringify(safe)]);
+  if(!user.authUserId)continue;
+  // Never derive role, approval, finance or grade from the compatibility payload.
+  await client.query('update public.user_profiles set username=$2,full_name=$3,company_name=$4,province=$5,city=$6,preferences=preferences || $7::jsonb where id=$1',[user.authUserId,user.username || null,user.fullName || '',user.companyName || '',user.province || null,user.city || null,JSON.stringify({onboardingCompleted:user.onboardingCompleted===true,activityField:user.activityField || ''})]);
+  for(const a of user.addresses || [])await client.query('insert into public.user_addresses(user_id,legacy_id,title,province,city,full_address,postal_code,recipient_name,recipient_phone) values($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict(user_id,legacy_id) do update set title=excluded.title,province=excluded.province,city=excluded.city,full_address=excluded.full_address,postal_code=excluded.postal_code,recipient_name=excluded.recipient_name,recipient_phone=excluded.recipient_phone,active=true',[user.authUserId,a.id,a.title || '',a.province || '',a.city || '',a.fullAddress || '',a.postalCode || '',a.recipientName || '',a.recipientPhone || '']);
+ }
+}
+export async function readAdoptedProducts(client:SqlClient){
+ const families=(await client.query('select * from public.catalog_families where is_active and not is_deleted order by code')).rows;
+ const variants=(await client.query('select v.*,c.price,c.base_price,c.retail_price,c.wholesale_price,c.dealer_price,c.stock,c.stock_reserved,c.stock_known,c.inquiry_only,c.currency from public.catalog_variants v left join public.variant_commercial_specs c on c.variant_code=v.code where v.active order by v.sort_order,v.code')).rows;
+ const images=(await client.query('select * from public.catalog_gallery_images order by sort_order,id')).rows;
+ const byFamily=new Map<string,Row[]>(),gallery=new Map<string,Row[]>();
+ for(const v of variants){const prices={base:toman(v.base_price,v.currency),retail:toman(v.retail_price || v.price,v.currency),wholesale:toman(v.wholesale_price,v.currency),dealer:toman(v.dealer_price,v.currency)};const dto={...v.runtime_payload,code:v.code,name:v.name,size:v.size || '',model:v.model,brand:v.brand,unit:v.unit,active:v.active,images:v.images,technicalSpecs:v.technical_specs,technicalReview:v.technical_review,prices,price:prices.retail,stock:Math.max(0,Number(v.stock || 0)-Number(v.stock_reserved || 0)),stockKnown:v.stock_known===true,inquiryOnly:v.inquiry_only!==false};const list=byFamily.get(v.family_code) || [];list.push(dto);byFamily.set(v.family_code,list);}
+ for(const i of images){const list=gallery.get(i.family_code) || [];list.push({id:i.id,url:i.url,fileName:i.file_name,scope:i.scope,variantCode:i.variant_code,identityVerified:i.identity_verified===true,title:i.title,order:i.sort_order});gallery.set(i.family_code,list);}
+ return families.map(f=>{const vs=byFamily.get(f.code) || [],first=vs[0];return {...f.runtime_payload,code:f.code,name:f.name,brand:f.brand,categorySlug:f.category_slug,categoryName:f.category_name,subcategory:f.subcategory || '',submenu:f.submenu,unit:f.unit,description:f.description,sourceRow:f.source_row,active:f.is_active,images:f.images,technicalSpecs:f.technical_specs,tags:f.tags,hasCatalogueImage:f.has_catalogue_image,imageScope:f.image_scope,galleryImages:gallery.get(f.code) || [],variants:vs,prices:first?.prices || {base:0,retail:0,wholesale:0,dealer:0},stock:vs.reduce((n,v)=>n+v.stock,0),stockKnown:vs.length>0 && vs.every(v=>v.stockKnown),inquiryOnly:!vs.length || vs.every(v=>v.inquiryOnly)};});
+}
+export async function saveAdoptedProducts(client:SqlClient,products:Row[]){
+ const skus=new Set<string>();for(const p of products)for(const v of p.variants || []){if(skus.has(v.code))throw new Error('Duplicate inventory SKU');skus.add(v.code);}
+ for(const p of products){
+  await client.query(`insert into public.catalog_families(code,name,brand,category_slug,category_name,subcategory,submenu,unit,description,images,technical_specs,tags,is_active) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(code) do update set name=excluded.name,brand=excluded.brand,category_slug=excluded.category_slug,category_name=excluded.category_name,subcategory=excluded.subcategory,submenu=excluded.submenu,unit=excluded.unit,description=excluded.description,images=excluded.images,technical_specs=excluded.technical_specs,tags=excluded.tags,is_active=excluded.is_active`,[p.code,p.name,p.brand || '',p.categorySlug || '',p.categoryName || '',p.subcategory || '',p.submenu || null,p.unit || 'عدد',p.description || '',JSON.stringify(p.images || []),JSON.stringify(p.technicalSpecs || []),JSON.stringify(p.tags || []),p.active!==false]);
+  for(const v of p.variants || []){
+   await client.query(`insert into public.catalog_variants(code,family_code,name,size,model,brand,unit,images,technical_specs,technical_review,active) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) on conflict(code) do update set family_code=excluded.family_code,name=excluded.name,size=excluded.size,model=excluded.model,brand=excluded.brand,unit=excluded.unit,images=excluded.images,technical_specs=excluded.technical_specs,technical_review=excluded.technical_review,active=excluded.active`,[v.code,p.code,v.name || p.name,v.size || '',v.model || '',v.brand || p.brand || '',v.unit || p.unit || 'عدد',JSON.stringify(v.images || []),JSON.stringify(v.technicalSpecs || []),JSON.stringify(v.technicalReview || {}),v.active!==false]);
+   // Metadata edits do not reset inventory, reservations, prices, or source currency.
+   await client.query('insert into public.variant_commercial_specs(variant_code,family_code) values($1,$2) on conflict(variant_code) do update set family_code=excluded.family_code',[v.code,p.code]);
+  }
+  for(const [position,image] of (p.galleryImages || []).entries())await client.query(`insert into public.catalog_gallery_images(id,family_code,variant_code,url,scope,title,sort_order,identity_verified) values($1,$2,$3,$4,$5,$6,$7,$8) on conflict(id) do update set variant_code=excluded.variant_code,url=excluded.url,scope=excluded.scope,title=excluded.title,sort_order=excluded.sort_order,identity_verified=excluded.identity_verified`,[image.id || sha([p.code,image.url,image.variantCode]),p.code,image.variantCode || null,image.url,image.scope || 'family',image.title || '',position,image.identityVerified===true]);
+ }
+}
