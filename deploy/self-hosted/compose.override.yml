@@ -1,0 +1,36 @@
+services:
+  api-gw:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+  supavisor:
+    ports: !reset []
+  app:
+    profiles: [application]
+    image: sanatpish-app:latest
+    restart: unless-stopped
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    env_file: ${SANATPISH_STATE_DIR}/app.env
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - sanatpish-ai-cache:/app/.cache
+      - sanatpish-customer-images:/app/imageai
+      - sanatpish-customer-uploads:/app/imagemoshtari
+    depends_on:
+      db:
+        condition: service_healthy
+      api-gw:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 15s
+      retries: 6
+      start_period: 60s
+volumes:
+  sanatpish-ai-cache:
+  sanatpish-customer-images:
+  sanatpish-customer-uploads:
