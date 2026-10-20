@@ -3,7 +3,10 @@ import {adoptedDatabase} from './adopted.fixture';
 import {readAdoptedProducts,saveAdoptedProducts,readAdoptedDocument,writeAdoptedDocument,persistAdoptedUsers,adoptedUsers} from '../../server/db/adopted';
 import {createAdoptedOrder,adoptedOrders} from '../../server/db/adoptedCheckout';
 import type {SqlClient} from '../../server/db/connection';
+import {getPortalIdentity} from '../../api/portal';
+import type {IncomingMessage} from 'node:http';
 const id='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222';
+test('anonymous database identity does not load private portal documents or authorize commerce',async()=>{const previous=process.env.DATA_BACKEND;try{process.env.DATA_BACKEND='postgres';assert.deepEqual(await getPortalIdentity({headers:{cookie:'sp_guest=untrusted'}} as IncomingMessage),{admin:false,user:undefined,canReadCommerce:false});}finally{if(previous===undefined)delete process.env.DATA_BACKEND;else process.env.DATA_BACKEND=previous;}});
 test('adopted runtime retains real codes, currency, stock and unknown UI fields without prototype tables',async()=>{const db=await adoptedDatabase();const sql=db as unknown as SqlClient;try{
  await saveAdoptedProducts(sql,[{code:'source-family',name:'Bearing',categorySlug:'bearings',categoryName:'Bearings',variants:[{code:'6202ZZ',name:'6202ZZ',stock:999,prices:{retail:999}}]}]);
  await db.exec("update public.variant_commercial_specs set stock=10,stock_known=true,retail_price=1200,currency='IRR',inquiry_only=false where variant_code='6202ZZ'");

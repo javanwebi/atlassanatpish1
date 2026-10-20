@@ -416,6 +416,10 @@ export default async function handler(
     if (req.method !== "GET" && req.method !== "POST")
       return send(405, { success: false });
     if(databaseEnabled() && req.method==="GET")await refreshAuth(req,res);
+    if(databaseEnabled() && req.method==="GET" && !/(?:^|;)\s*sp_access=/.test(req.headers.cookie || '')){
+      const revision=Number((await postgresDatabase().query('select revision from app_private.portal_version where singleton=true')).rows[0].revision);
+      return send(200,{success:true,smsAvailable:process.env.SUPABASE_SMS_READY==='true',revision,user:null,admin:false,values:{}});
+    }
     const db = await readDb();
     const auth = await session(req, db);
     if (req.method === "GET")
@@ -881,6 +885,7 @@ export async function requirePortalAdmin(
 
 /** Resolves a signed session against the current persisted user and revocation version. */
 export async function getPortalIdentity(req: IncomingMessage) {
+  if(databaseEnabled() && !/(?:^|;)\s*sp_access=/.test(req.headers.cookie || ''))return {admin:false,user:undefined,canReadCommerce:false};
   const db = await readDb();
   const identity = await session(req, db);
   return {
