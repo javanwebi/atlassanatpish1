@@ -15,13 +15,13 @@ export async function refreshDurableStorage(){
  return data;
 }
 export const durableStorage={
- getItem(key:string):string|null{if(!enabled)return typeof globalThis.localStorage==='undefined'?null:globalThis.localStorage.getItem(key);return memory.get(key) ?? (ephemeral(key) || /settings|club_config|stock_v2|layout_configs/.test(key)?null:'[]');},
- setItem(key:string,value:string){if(!enabled){globalThis.localStorage.setItem(key,value);return;}if(memory.get(key)===value)return;memory.set(key,value);if(hydrating || portalOwned.has(key) || ephemeral(key) || readOnly.has(key))return;
+ getItem(key:string):string|null{if(!enabled)return null;return memory.get(key) ?? (ephemeral(key) || /settings|club_config|stock_v2|layout_configs/.test(key)?null:'[]');},
+ setItem(key:string,value:string){if(!enabled)throw new Error('پایگاه داده هنوز آماده نیست؛ داده به صورت محلی ذخیره نشد.');if(memory.get(key)===value)return;memory.set(key,value);if(hydrating || portalOwned.has(key) || ephemeral(key) || readOnly.has(key))return;
   const actor=userId;
   const previous=queues.get(key) || Promise.resolve();
   const pending=previous.then(async()=>{emit('saving');const res=await fetch('/api/runtime',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,value:JSON.parse(value),version:versions.get(key) || 0,userId:actor})});const data=await res.json();if(!res.ok || !data.success)throw new Error(data.message || 'ذخیره در دیتابیس انجام نشد.');versions.set(key,data.version);emit('saved');}).catch(error=>{failure=error;emit('error',error.message);throw error;});
   queues.set(key,pending);void pending.catch(()=>{});
  },
- removeItem(key:string){if(!enabled){globalThis.localStorage.removeItem(key);return;}if(ephemeral(key)){memory.delete(key);return;}this.setItem(key,'null');},
+ removeItem(key:string){if(!enabled)return;if(ephemeral(key)){memory.delete(key);return;}this.setItem(key,'null');},
 };
 export async function flushDurableChanges(){await Promise.all([...queues.values()]);if(failure)throw failure;}

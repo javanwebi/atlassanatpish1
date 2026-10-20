@@ -1,4 +1,4 @@
-import {durableStorage} from "./durableStorage";
+import {durableStorage,databaseStorageEnabled} from "./durableStorage";
 import { portalRequest, hydratePortal, clearPortalCache } from './portalRepository';
 import { persistPortalCache } from './portalRepository';
 import { Product, Order, PriceInquiry, Customer, DiscountCode, SmsLog, AgencyApplication, Category, Brand, Ticket, Representative, OfficialInvoice } from '../types';
@@ -422,7 +422,7 @@ export const adminService = {
     } catch {
       // ignore
     }
-    return INITIAL_AUDIT_LOGS;
+    return databaseStorageEnabled()?[]:INITIAL_AUDIT_LOGS;
   },
 
   logAction(action: string, entity: string, details: string): void {
@@ -562,7 +562,7 @@ export const adminService = {
     } catch {
       // ignore
     }
-    return INITIAL_PRICE_HISTORY;
+    return databaseStorageEnabled()?[]:INITIAL_PRICE_HISTORY;
   },
 
   addPriceLog(record: Omit<PriceHistoryRecord, 'id' | 'date'>): void {
@@ -902,7 +902,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
     } catch {
       // ignore
     }
-    return INITIAL_BANNERS;
+    return databaseStorageEnabled()?[]:INITIAL_BANNERS;
   },
 
   saveBanner(banner: BannerItem): void {
@@ -939,6 +939,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
     } catch {
       // ignore
     }
+    if(databaseStorageEnabled())throw new Error('تنظیمات باشگاه از دیتابیس دریافت نشده است.');
     return INITIAL_CLUB_CONFIG;
   },
 
@@ -959,7 +960,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
     } catch {
       // ignore
     }
-    return INITIAL_SMS_TEMPLATES;
+    return databaseStorageEnabled()?[]:INITIAL_SMS_TEMPLATES;
   },
 
   saveSmsTemplate(template: SmsTemplate): void {
@@ -1003,7 +1004,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
     } catch {
       // ignore
     }
-    return MOCK_DISCOUNT_CODES;
+    return databaseStorageEnabled()?[]:MOCK_DISCOUNT_CODES;
   },
 
   saveDiscount(discount: DiscountCode): void {
@@ -1045,7 +1046,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
     } catch {
       // ignore
     }
-    return CATEGORIES;
+    return databaseStorageEnabled()?[]:CATEGORIES;
   },
 
   saveCategory(category: Category): void {
@@ -1110,7 +1111,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
     } catch {
       // ignore
     }
-    return BRANDS;
+    return databaseStorageEnabled()?[]:BRANDS;
   },
 
   saveBrand(brand: Brand): void {
@@ -1439,6 +1440,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
     } catch {
       // ignore
     }
+    if(databaseStorageEnabled())throw new Error('تنظیمات سایت از دیتابیس دریافت نشده است.');
     const initial: SystemSettings = {
       paymentGateway: {
         provider: 'mellat',
@@ -1483,7 +1485,7 @@ ERR-001,تسمه بدون قیمت تستی,نامشخص,ناشناخته,0,-5`;
   },
 
   getAdminUsers(): AdminUser[] {
-    return INITIAL_ADMINS;
+    return databaseStorageEnabled()?[]:INITIAL_ADMINS;
   },
 
   getOfficialInvoices(): OfficialInvoice[] {

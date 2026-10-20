@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import { IRAN_PROVINCES, ACTIVITY_FIELDS } from "../../data/iranLocations";
 import { normalizeIranianMobile } from "../../utils/usernameGenerator";
 import { STORE_ASSETS as A } from "../../assets/images";
 import { RegisterPayload } from "../../types";
+import { portalRequest, hydratePortal } from "../../services/portalRepository";
 import { PhoneLogin } from "./PhoneLogin";
 export function AccountAccess({
   initial = "login",
@@ -33,6 +34,9 @@ export function AccountAccess({
     [city, setCity] = useState("");
   const [requiresVerification,setRequiresVerification]=useState(false);
   const [details, setDetails] = useState<Partial<RegisterPayload>>({});
+  useEffect(()=>{
+    if((auth.currentUser as {registrationCredentialsPending?:boolean}|null)?.registrationCredentialsPending){setMode('register');setStep(2);setRequiresVerification(false);}
+  },[auth.currentUser]);
   const go = (user = auth.currentUser) => {
     onDone?.();
     const root = user?.approvedB2B ? "/account" : "/consumer-dashboard";
@@ -57,7 +61,7 @@ export function AccountAccess({
         setError("شماره موبایل معتبر وارد کنید.");
         return;
       }
-      setDetails({
+      const registrationDetails = {
         firstName: String(data.get("firstName") || ""),
         lastName: String(data.get("lastName") || ""),
         mobile: mobile.normalized,
@@ -70,8 +74,14 @@ export function AccountAccess({
         city: IRAN_PROVINCES.find((p) => p.id === province)?.cities.find(
           (c) => c.id === city,
         )?.name,
-      });
-      setStep(2);
+      };
+      setDetails(registrationDetails);
+      setBusy(true);
+      try {
+        const result=await auth.registerUser(registrationDetails as RegisterPayload);
+        if(!result.success){setError(result.message || 'ارسال کد انجام نشد.');return;}
+        setRequiresVerification(true);setMode('login');setMethod('sms');
+      } finally {setBusy(false);}
       return;
     }
     if (
@@ -89,11 +99,12 @@ export function AccountAccess({
               String(data.get("identifier") || ""),
               String(data.get("password") || ""),
             )
-          : await auth.registerUser({
-              ...details,
+          : await portalRequest({
+              action: "registration_credentials",
               username: String(data.get("username") || ""),
               password: String(data.get("password") || ""),
-            } as RegisterPayload);
+            });
+      if(mode === "register" && r.success)await hydratePortal();
       if (!r.success) {
         setError(r.message || "اطلاعات را بررسی کنید.");
         return;
@@ -101,8 +112,8 @@ export function AccountAccess({
       if(r.requiresPhoneVerification){setRequiresVerification(true);setMode("login");setMethod("sms");return;}
       auth.setLatestCredentials(null);
       go(r.user || null);
-    } catch {
-      setError("ارتباط برقرار نشد؛ دوباره تلاش کنید.");
+    } catch (e:any) {
+      setError(e.message || "ارتباط برقرار نشد؛ دوباره تلاش کنید.");
     } finally {
       setBusy(false);
     }
@@ -176,7 +187,7 @@ export function AccountAccess({
           <p>
             {mode === "login"
               ? "با شماره موبایل یا نام کاربری وارد شوید."
-              : "اطلاعات کسب‌وکار، سپس انتخاب نام کاربری و رمز عبور."}
+              : "اطلاعات کسب‌وکار، تأیید موبایل، سپس انتخاب نام کاربری و رمز عبور."}
           </p>
         </div>
         <div
@@ -191,6 +202,7 @@ export function AccountAccess({
               onClick={() => {
                 setMode(m);
                 setStep(1);
+                setRequiresVerification(false);
                 setError("");
               }}
             >
@@ -221,7 +233,7 @@ export function AccountAccess({
           </div>
         )}
         {mode === "login" && method === "sms" ? (
-          <PhoneLogin initialPhone={requiresVerification?details.mobile:undefined} initialSent={requiresVerification} onSuccess={go} />
+          <PhoneLogin initialPhone={requiresVerification?details.mobile:undefined} initialSent={requiresVerification} onSuccess={(user,pending)=>{if(pending){setRequiresVerification(false);setMode('register');setStep(2);}else go(user);}} />
         ) : (
           <form onSubmit={submit} className="account-fields">
             {mode === "login" ? (
@@ -251,7 +263,9 @@ export function AccountAccess({
                 <div className="registration-progress">
                   <span data-active={step === 1}>۱. اطلاعات کسب‌وکار</span>
                   <i />
-                  <span data-active={step === 2}>۲. اطلاعات ورود</span>
+                  <span>۲. تأیید موبایل</span>
+                  <i />
+                  <span data-active={step === 2}>۳. اطلاعات ورود</span>
                 </div>
                 {step === 1 ? (
                   <>
@@ -415,8 +429,8 @@ export function AccountAccess({
                 : mode === "login"
                   ? "ورود به پنل"
                   : step === 1
-                    ? "ادامه و انتخاب اطلاعات ورود"
-                    : "ساخت حساب و تکمیل پرسش‌ها"}
+                    ? "ادامه و دریافت کد تأیید"
+                    : "ذخیره اطلاعات ورود و ادامه"}
               <ArrowLeft size={17} />
             </button>
           </form>

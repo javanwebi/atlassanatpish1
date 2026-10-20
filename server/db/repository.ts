@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {database,transaction,adoptedSchema,type SqlClient} from './connection';
-import {readAdoptedDocument,writeAdoptedDocument,adoptedUsers,persistAdoptedUsers,readAdoptedProducts,saveAdoptedProducts} from './adopted';
+import {adoptedNamespaces,readAdoptedDocument,writeAdoptedDocument,adoptedUsers,persistAdoptedUsers,readAdoptedProducts,saveAdoptedProducts} from './adopted';
 import {domainTables,domainFor,type Domain} from './namespaces';
 type Row=Record<string,any>;
 export interface PortalDatabase {revision:number;users:Row[];values:Record<string,any>;otp?:Record<string,any>;}
@@ -35,7 +35,7 @@ export async function readPortal():Promise<PortalDatabase>{return transaction(as
  const revision=Number((await client.query('select revision from app_private.portal_version where singleton=true')).rows[0].revision);
  const users=adoptedSchema()?await adoptedUsers(client):(await client.query('select payload from app_private.portal_users where active order by id')).rows.map(row=>row.payload);
  const keys=(await client.query("select namespace from app_private.document_versions where scope_id='global'")).rows.map(row=>row.namespace).filter(key=>domainFor(key));
- const values:Row={};for(const key of keys)values[key]=await readDocument(client,key);
+ const values:Row={};for(const key of new Set([...keys,...(adoptedSchema()?adoptedNamespaces():[])]))values[key]=await readDocument(client,key);
  const otp=adoptedSchema()?{}:Object.fromEntries((await client.query('select id,payload from app_private.legacy_otp')).rows.map(row=>[row.id,row.payload]));
  return {revision,users,values,otp};
 });}

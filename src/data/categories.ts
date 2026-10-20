@@ -1,4 +1,4 @@
-import {durableStorage} from "../services/durableStorage";
+import {durableStorage,databaseStorageEnabled} from "../services/durableStorage";
 import { BELT_MENU, matchesBeltSelection } from "./beltNavigation";
 import type { Category, Product } from '../types';
 import { USER_PRODUCTS, USER_PRODUCTS_RAW, categorySlugFor } from './userProducts';
@@ -66,7 +66,7 @@ export function getManagedCategories(): EnhancedCategory[] {
     const raw = durableStorage.getItem(CATEGORIES_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed) && (databaseStorageEnabled() || parsed.length > 0)) {
         return parsed.map((c: any) => ({
           ...c,
           children: Array.isArray(c.children) && c.children.length > 0
@@ -78,7 +78,7 @@ export function getManagedCategories(): EnhancedCategory[] {
   } catch {
     // ignore
   }
-  return CATEGORIES;
+  return databaseStorageEnabled()?[]:CATEGORIES;
 }
 
 export const findCatalogCategory = (slug: string) =>

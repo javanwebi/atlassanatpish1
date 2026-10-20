@@ -437,7 +437,7 @@ export default async function handler(
       });
     csrf(req);
     const body = await readBody(req);
-    if(databaseEnabled() && ["register","login","admin_login","otp_request","otp_verify","logout"].includes(body.action)){await rateLimit(req);if(await supabaseAuthAction(req,res,body,safeUser))return;}
+    if(databaseEnabled() && ["register","login","admin_login","otp_request","otp_verify","registration_credentials","logout"].includes(body.action)){await rateLimit(req);if(await supabaseAuthAction(req,res,body,safeUser))return;}
     const revision = db.revision;
     if (body.action === "logout") {
       res.setHeader(

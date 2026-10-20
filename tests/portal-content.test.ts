@@ -5,13 +5,8 @@ import {
   type PortalBannerItem,
 } from "../src/services/portalContentService";
 import type { Customer } from "../src/types";
-const cache = new Map<string, string>();
-Object.defineProperty(globalThis, "localStorage", {
-  value: {
-    getItem: (key: string) => cache.get(key) ?? null,
-    setItem: (key: string, value: string) => cache.set(key, value),
-  },
-});
+import {durableStorage,refreshDurableStorage} from '../src/services/durableStorage';
+globalThis.fetch=async()=>new Response(JSON.stringify({success:true,database:true,values:{},versions:{},products:[]}));
 Object.defineProperty(globalThis, "window", { value: new EventTarget() });
 const user = {
   id: "one",
@@ -40,6 +35,7 @@ const banner = (
   ...extra,
 });
 test("portal content and campaign rules", async (t) => {
+  await refreshDurableStorage();
   await t.test("role or price code alone cannot grant the CRM portal", () => {
     assert.equal(
       cms.isHighVolumeCustomer({
@@ -60,7 +56,7 @@ test("portal content and campaign rules", async (t) => {
     () => {
       const key = "atlas_portal_club_milestones_v1";
       const legacy = cms.getClubMilestones("high_volume");
-      localStorage.setItem(key, JSON.stringify(legacy));
+      durableStorage.setItem(key, JSON.stringify(legacy));
       assert.notDeepEqual(cms.getClubMilestones("consumer"), legacy);
       const consumer = cms
         .getClubMilestones("consumer")
@@ -96,7 +92,7 @@ test("portal content and campaign rules", async (t) => {
     },
   );
   await t.test("empty banners stay deleted", () => {
-    localStorage.setItem("atlas_portal_content_banners_v1", "[]");
+    durableStorage.setItem("atlas_portal_content_banners_v1", "[]");
     assert.deepEqual(cms.getBanners(), []);
   });
   await t.test(
@@ -134,7 +130,7 @@ test("portal content and campaign rules", async (t) => {
   await t.test(
     "thresholds, targeting, disabled campaigns, invalid percentages and strongest offer",
     () => {
-      localStorage.setItem(
+      durableStorage.setItem(
         "atlas_portal_content_banners_v1",
         JSON.stringify([
           banner("all"),

@@ -8,5 +8,5 @@ export const namespaces:Record<string,Domain>={
 };
 export function domainFor(key:string):Domain|undefined{return namespaces[key] || (key.startsWith('hyper_sanat_wishlist_v1:') ? 'customer_state' : undefined);}
 export const customerWritable=new Set(['hyper_sanat_viewed_categories','hyper_sanat_cart_v2','hyper_sanat_saved_v2','atlas_plant_machinery_passport_v1','forza_industrial_chat_sessions_v2','forza_active_session_id_v2']);
-export const publicReadable=new Set(['atlas_admin_blog_v1','atlas_admin_pages_v1','atlas_admin_banners_v1','atlas_admin_categories_v1','atlas_admin_brands_v1','atlas_clients_logos_v3_moshtari']);
+export const publicReadable=new Set(['atlas_admin_club_config_v1','atlas_admin_blog_v1','atlas_admin_pages_v1','atlas_admin_banners_v1','atlas_admin_categories_v1','atlas_admin_brands_v1','atlas_clients_logos_v3_moshtari']);
 export function canWriteCustomerNamespace(key:string,userId:string){return customerWritable.has(key) || key===`hyper_sanat_wishlist_v1:${userId}`;}

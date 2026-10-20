@@ -4,11 +4,11 @@ import { groupProductFamilies } from './productFamilies';
 import { publicCatalog } from "../utils/catalogPrivacy";
 import { Product, ProductGalleryImage, ProductVariant } from "../types";
 import {
-  CATEGORIES,
+  CATEGORIES, getManagedCategories,
   matchesCatalogCategory,
   flattenCategoryNodes,
 } from "./categories";
-import { BRANDS } from "./brands";
+import { BRANDS, getManagedBrands } from "./brands";
 import {
   USER_PRODUCTS,
   USER_PRODUCTS_RAW,
@@ -751,7 +751,7 @@ export function getInstantSearchResults(query: string) {
     )
     .slice(0, 6);
 
-  const matchedCategories = CATEGORIES.filter(
+  const matchedCategories = getManagedCategories().filter(
     (c) =>
       c.name.toLowerCase().includes(q) ||
       flattenCategoryNodes(c.children).some((node) =>
@@ -759,7 +759,7 @@ export function getInstantSearchResults(query: string) {
       ),
   ).slice(0, 4);
 
-  const matchedBrands = BRANDS.filter(
+  const matchedBrands = getManagedBrands().filter(
     (b) =>
       b.name.toLowerCase().includes(q) || b.nameEn.toLowerCase().includes(q),
   ).slice(0, 3);

@@ -6,7 +6,7 @@ export function PhoneLogin({
   onSuccess,initialPhone="",initialSent=false,
 }: {
   initialPhone?:string;initialSent?:boolean;
-  onSuccess: (user: Customer) => void;
+  onSuccess: (user: Customer, requiresCredentials?: boolean) => void;
 }) {
   const [phone, setPhone] = useState(initialPhone),
     [code, setCode] = useState(""),
@@ -14,7 +14,7 @@ export function PhoneLogin({
     [notice, setNotice] = useState("");
   const [sent, setSent] = useState(initialSent),
     [busy, setBusy] = useState(false),
-    [seconds, setSeconds] = useState(0);
+    [seconds, setSeconds] = useState(initialSent?60:0);
   useEffect(() => {
     if (!seconds) return;
     const timer = setTimeout(() => setSeconds((s) => Math.max(0, s - 1)), 1000);
@@ -42,7 +42,7 @@ export function PhoneLogin({
     try {
       const r = await portalRequest({ action: "otp_verify", phone, code });
       await hydratePortal();
-      onSuccess(r.user);
+      onSuccess(r.user,r.requiresCredentials);
     } catch (e: any) {
       setError(e.message || "کد معتبر نیست.");
     } finally {
@@ -68,7 +68,7 @@ export function PhoneLogin({
       {sent && (
         <>
           <p role="status" className="account-help">
-            {notice} کد تا ۳ دقیقه معتبر است.
+            {notice || "کد ارسال‌شده به شماره موبایل خود را وارد کنید."}
           </p>
           <label>
             کد شش‌رقمی

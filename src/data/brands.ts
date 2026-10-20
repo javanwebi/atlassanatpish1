@@ -1,4 +1,4 @@
-import {durableStorage} from "../services/durableStorage";
+import {durableStorage,databaseStorageEnabled} from "../services/durableStorage";
 import { Brand } from '../types';
 
 function createBrandBadgeSvg(title: string, subtitle: string, accent: string, darkBg = '#1E293B'): string {
@@ -161,9 +161,9 @@ export function getManagedBrands(): Brand[] {
       const stored = durableStorage.getItem('atlas_admin_brands_v1');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed) && (databaseStorageEnabled() || parsed.length > 0)) {
           return parsed.map((b: Brand) => {
-            const fallback = BRANDS.find(d => d.id === b.id);
+            const fallback = databaseStorageEnabled()?undefined:BRANDS.find(d => d.id === b.id);
             return {
               ...fallback,
               ...b,
@@ -178,5 +178,5 @@ export function getManagedBrands(): Brand[] {
       // ignore
     }
   }
-  return BRANDS;
+  return databaseStorageEnabled()?[]:BRANDS;
 }

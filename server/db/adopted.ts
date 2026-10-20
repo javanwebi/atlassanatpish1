@@ -9,17 +9,29 @@ export const toman=(value:unknown,currency:string)=>Number(value || 0)/(currency
 const roles:Row={client:'retail',club:'wholesale',agency:'dealer',super_admin:'admin'};
 export async function readAdoptedDocument(client:SqlClient,key:string,scope:string){
  if(scope==='global' && key==='atlas_admin_orders_v1')return adoptedOrders(client);
- const row=scope==='global'?(await client.query('select value from public.portal_kv_store where key=$1',[key])).rows[0]:(await client.query('select value from app_private.scoped_documents where namespace=$1 and scope_id=$2',[key,scope])).rows[0];
- if(row)return row.value;
+ if(scope==='global' && key==='atlas_admin_club_config_v1'){const row=(await client.query('select * from public.club_configs order by id limit 1')).rows[0];return row?{...row.extra_rules,...Object.fromEntries(Object.entries(row).map(([k,v])=>[camel(k),v])),pointsPer100kTomans:row.points_per_100k_tomans}:undefined;}
+ if(scope==='global' && key==='atlas_admin_settings_v1'){const row=(await client.query('select * from public.system_settings order by id limit 1')).rows[0];return row?{...row.raw_settings,paymentGateway:row.payment_gateway,smsProvider:row.sms_provider,shippingMethods:row.shipping_methods,currency:row.currency,seo:row.seo}:undefined;}
  if(key==='catalogue/base')return readAdoptedProducts(client);
  if(key==='catalog_overrides/runtime')return (await client.query("select value from public.portal_kv_store where key='catalog_overrides_db_v1'")).rows[0]?.value;
- const source=projections[key];if(!source)return undefined;
- const data=(await client.query(`select * from public.${source.table} order by ${source.pk || 'id'}`)).rows;
- if(source.table==='portal_layout_configs')return Object.fromEntries(data.map(row=>[row.portal_key,row.config]));
- return data.map(row=>decode(row,source));
+ // Domain tables are authoritative; a historical compatibility document must never mask table edits.
+ const source=scope==='global'?projections[key]:undefined;
+ if(source){
+  const filter=key==='atlas_admin_banners_v1'?" where scope='storefront'":key==='atlas_portal_content_banners_v1'?" where scope<>'storefront'":key==='atlas_legacy_customers_v1'?' where is_legacy=true':'';
+  const data=(await client.query(`select * from public.${source.table}${filter} order by ${source.pk || 'id'}`)).rows;
+  if(source.table==='portal_layout_configs')return Object.fromEntries(data.map(row=>[row.portal_key,row.config]));
+  const compatibility=(await client.query('select value from public.portal_kv_store where key=$1',[key])).rows[0]?.value;
+  const previous=Array.isArray(compatibility)?compatibility:[];
+  // Preserve unknown legacy fields, but known table columns always win; deleted table rows stay absent.
+  const pk=source.pk || 'id',property=source.aliases?.[pk] || camel(pk);
+  const extras=new Map(previous.map((entry:Row)=>[String(entry[property]),entry]));
+  return data.map(row=>({...extras.get(String(row[pk])),...decode(row,source)}));
+ }
+ const row=scope==='global'?(await client.query('select value from public.portal_kv_store where key=$1',[key])).rows[0]:(await client.query('select value from app_private.scoped_documents where namespace=$1 and scope_id=$2',[key,scope])).rows[0];
+ return row?.value;
 }
 type Projection={table:string;pk?:string;aliases?:Record<string,string>;defaults?:Row};
 /** Documents preserve the original UI contract; typed tables are updated in the same transaction. */
+export const adoptedNamespaces=()=>[...Object.keys(projections),'atlas_admin_club_config_v1','atlas_admin_settings_v1'];
 const projections:Record<string,Projection>={
  atlas_admin_customers_v1:{table:'crm_customers',aliases:{company:'companyName',name:'name',grade_code:'tierCode'}},
  atlas_legacy_customers_v1:{table:'crm_customers',aliases:{company:'companyName',grade_code:'tierCode'},defaults:{is_legacy:true}},
@@ -39,8 +51,14 @@ const projections:Record<string,Projection>={
  atlas_admin_discounts_v1:{table:'discount_codes'},atlas_admin_campaigns_v1:{table:'marketing_campaigns'},
  atlas_admin_tickets_v1:{table:'support_tickets'},atlas_admin_audit_logs_v1:{table:'audit_logs',aliases:{timestamp_label:'timestamp'}},
 };
-function decode(row:Row,source:Projection){const result:Row={...(row.raw_payload || {})};for(const [key,value] of Object.entries(row))if(!['raw_payload','created_at','updated_at'].includes(key))result[source.aliases?.[key] || camel(key)]=value;return result;}
+function decode(row:Row,source:Projection){const result:Row={...(row.raw_payload || {}),...(source.table==='catalog_categories'?row.metadata || {}:{})};for(const [key,value] of Object.entries(row))if(!['raw_payload','created_at','updated_at'].includes(key))result[source.aliases?.[key] || camel(key)]=value;if(source.table==='catalog_brands'){result.nameEn=result.nameEn || row.name;result.logo=row.logo_url;result.image=row.logo_url;result.active=true;}return result;}
 async function projectDocument(client:SqlClient,key:string,value:unknown){
+ if(key==='atlas_admin_club_config_v1' && value && typeof value==='object'){
+  const v=value as Row;await client.query('update public.club_configs set points_per_100k_tomans=$1,toman_per_point_redeem=$2,bronze_threshold=$3,silver_threshold=$4,gold_threshold=$5,welcome_gift_points=$6 where id=(select id from public.club_configs order by id limit 1)',[v.pointsPer100kTomans,v.tomanPerPointRedeem,v.bronzeThreshold,v.silverThreshold,v.goldThreshold,v.welcomeGiftPoints]);return;
+ }
+ if(key==='atlas_admin_settings_v1' && value && typeof value==='object'){
+  const v=value as Row;await client.query('update public.system_settings set payment_gateway=$1,sms_provider=$2,shipping_methods=$3,currency=$4,seo=$5,raw_settings=$6 where id=(select id from public.system_settings order by id limit 1)',[v.paymentGateway,v.smsProvider,v.shippingMethods,v.currency,v.seo,JSON.stringify(v)]);return;
+ }
  const source=projections[key];if(!source)return;
  if(source.table==='portal_layout_configs' && value && typeof value==='object' && !Array.isArray(value))value=Object.entries(value).map(([portal,config])=>({portal,config}));
  if(!Array.isArray(value))return;
@@ -50,6 +68,7 @@ async function projectDocument(client:SqlClient,key:string,value:unknown){
   if(!entry || typeof entry!=='object')throw new Error('Invalid document record');
   const row:Row={...source.defaults};
   for(const column of columns){const name=column.column_name;if(['created_at','updated_at','auth_user_id','user_id'].includes(name))continue;const property=source.aliases?.[name] || camel(name);if(Object.hasOwn(entry,property))row[name]=entry[property];}
+  if(source.table==='catalog_categories')row.metadata={...(entry.metadata || {}),children:entry.children || [],subcategories:entry.subcategories || [],count:entry.count || 0};
   if(columns.some(c=>c.column_name==='raw_payload'))row.raw_payload=entry;
   if(row[pk]==null)throw new Error(`Missing ${pk} for ${key}`);
   const names=Object.keys(row);const assignments=names.filter(n=>n!==pk).map(n=>`"${n}"=excluded."${n}"`).join(',');
@@ -80,16 +99,17 @@ export async function writeAdoptedDocument(client:SqlClient,key:string,value:unk
 export async function adoptedUsers(client:SqlClient){
  const drafts=(await client.query('select id,payload,auth_user_id,active from app_private.portal_users')).rows;
  const profiles=(await client.query('select * from public.user_profiles')).rows;
- return profiles.map(p=>{const draft=drafts.find(d=>d.auth_user_id===p.id || d.id===p.legacy_user_id);return {...(draft?.payload || {}),id:draft?.id || p.legacy_user_id || p.id,authUserId:p.id,phone:p.phone?.replace(/^\+98/,'0'),email:p.email,username:p.username,fullName:p.full_name,companyName:p.company_name,role:roles[p.role] || 'guest',active:p.status==='active' && draft?.active!==false,approvedB2B:p.approved_b2b,canViewPrices:p.can_view_prices,canViewStock:p.can_view_stock,creditLimit:Number(p.credit_limit),creditUsed:Number(p.credit_used),walletBalance:Number(p.wallet_balance),clubPoints:p.club_points};});
+ const addresses=(await client.query('select * from public.user_addresses where active')).rows;
+ return profiles.map(p=>{const draft=drafts.find(d=>d.auth_user_id===p.id || d.id===p.legacy_user_id);return {...(draft?.payload || {}),...(p.preferences || {}),addresses:addresses.filter(a=>a.user_id===p.id).map(a=>({id:a.legacy_id || a.id,title:a.title,province:a.province,city:a.city,fullAddress:a.full_address,postalCode:a.postal_code,recipientName:a.recipient_name,recipientPhone:a.recipient_phone})),id:draft?.id || p.legacy_user_id || p.id,authUserId:p.id,phone:p.phone?.replace(/^\+98/,'0'),email:p.email,username:p.username,fullName:p.full_name,companyName:p.company_name,role:roles[p.role] || 'guest',active:p.status==='active' && draft?.active!==false,approvedB2B:p.approved_b2b,canViewPrices:p.can_view_prices,canViewStock:p.can_view_stock,creditLimit:Number(p.credit_limit),creditUsed:Number(p.credit_used),walletBalance:Number(p.wallet_balance),clubPoints:p.club_points};});
 }
 export async function persistAdoptedUsers(client:SqlClient,users:Row[]){
  // No missing user is deleted or deactivated by a stale whole-document save.
  for(const user of users){
   const safe=safePayload(user);
-  await client.query('insert into app_private.portal_users(id,auth_user_id,payload) values($1,$2,$3) on conflict(id) do update set auth_user_id=coalesce(excluded.auth_user_id,portal_users.auth_user_id),payload=excluded.payload',[user.id,user.authUserId || null,JSON.stringify(safe)]);
+  if(!user.authUserId)await client.query('insert into app_private.portal_users(id,auth_user_id,payload) values($1,$2,$3) on conflict(id) do update set auth_user_id=coalesce(excluded.auth_user_id,portal_users.auth_user_id),payload=excluded.payload',[user.id,user.authUserId || null,JSON.stringify(safe)]);
   if(!user.authUserId)continue;
   // Never derive role, approval, finance or grade from the compatibility payload.
-  await client.query('update public.user_profiles set username=$2,full_name=$3,company_name=$4,province=$5,city=$6,preferences=preferences || $7::jsonb where id=$1',[user.authUserId,user.username || null,user.fullName || '',user.companyName || '',user.province || null,user.city || null,JSON.stringify({onboardingCompleted:user.onboardingCompleted===true,activityField:user.activityField || ''})]);
+  await client.query('update public.user_profiles set username=$2,full_name=$3,company_name=$4,province=$5,city=$6,preferences=preferences || $7::jsonb where id=$1',[user.authUserId,user.username || null,user.fullName || '',user.companyName || '',user.province || null,user.city || null,JSON.stringify({onboardingCompleted:user.onboardingCompleted===true,activityField:user.activityField || '',firstName:user.firstName || '',lastName:user.lastName || '',provinceId:user.provinceId || '',cityId:user.cityId || '',favoriteBrands:user.favoriteBrands || [],businessType:user.businessType || ''})]);
   for(const a of user.addresses || [])await client.query('insert into public.user_addresses(user_id,legacy_id,title,province,city,full_address,postal_code,recipient_name,recipient_phone) values($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict(user_id,legacy_id) do update set title=excluded.title,province=excluded.province,city=excluded.city,full_address=excluded.full_address,postal_code=excluded.postal_code,recipient_name=excluded.recipient_name,recipient_phone=excluded.recipient_phone,active=true',[user.authUserId,a.id,a.title || '',a.province || '',a.city || '',a.fullAddress || '',a.postalCode || '',a.recipientName || '',a.recipientPhone || '']);
  }
 }

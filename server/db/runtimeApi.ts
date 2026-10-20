@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type {Request,Response} from 'express';
 import {database,databaseEnabled,transaction,adoptedSchema} from './connection';
 import {adoptedOrders} from './adoptedCheckout';
-import {readAdoptedProducts,toman} from './adopted';
+import {adoptedNamespaces,readAdoptedProducts,toman} from './adopted';
 import {readDocument,writeDocument,readProducts,conflict} from './repository';
 import {domainFor,canWriteCustomerNamespace,publicReadable} from './namespaces';
 import {getPortalIdentity} from '../../api/portal';
@@ -20,6 +20,10 @@ export async function runtimeApi(req:Request,res:Response){
    for(const row of metadata){if(!domainFor(row.namespace))continue;
     if(row.scope_id==='global' && !(identity.admin || publicReadable.has(row.namespace)))continue;
     values[row.namespace]=await readDocument(database(),row.namespace,row.scope_id);versions[row.namespace]=Number(row.version);
+   }
+   if(adoptedSchema())for(const key of adoptedNamespaces()){
+    if(Object.hasOwn(values,key) || !(identity.admin || publicReadable.has(key)))continue;
+    const value=await readDocument(database(),key,'global');if(value!==undefined){values[key]=value;versions[key]=0;}
    }
    if(identity.user)values.hyper_sanat_orders_v2=adoptedSchema()?await adoptedOrders(database(),identity.user.authUserId):(await database().query('select payload from public.orders where active and (owner_id=$1 or legacy_customer_id=$1) order by updated_at desc',[identity.user.id])).rows.map(row=>row.payload);
    const products=adoptedSchema() && !identity.admin && identity.user?await transaction(async client=>{
