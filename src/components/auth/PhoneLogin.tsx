@@ -1,3 +1,4 @@
+import {mobileInput,normalizeDigits} from "../../utils/authValidation";
 import React, { useEffect, useState } from "react";
 import { ArrowLeft, RotateCcw, Smartphone } from "lucide-react";
 import { portalRequest, hydratePortal } from "../../services/portalRepository";
@@ -21,6 +22,7 @@ export function PhoneLogin({
     return () => clearTimeout(timer);
   }, [seconds]);
   const request = async () => {
+    if(!/^09[0-9]{9}$/.test(phone)){setError("شماره موبایل باید ۱۱ رقم و با 09 شروع شود.");return;}
     setBusy(true);
     setError("");
     try {
@@ -56,12 +58,15 @@ export function PhoneLogin({
         <input
           type="tel"
           dir="ltr"
-          inputMode="tel"
+          inputMode="numeric"
+          minLength={11}
+          maxLength={11}
+          pattern="09[0-9]{9}"
           autoComplete="tel"
           required
           value={phone}
           disabled={sent}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => setPhone(mobileInput(e.target.value))}
           placeholder="09123456789"
         />
       </label>
@@ -77,11 +82,12 @@ export function PhoneLogin({
               dir="ltr"
               inputMode="numeric"
               autoComplete="one-time-code"
+              pattern="[0-9]{6}"
               minLength={6}
               maxLength={6}
               required
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(normalizeDigits(e.target.value).replace(/[^0-9]/g,"").slice(0,6))}
               placeholder="------"
             />
           </label>
