@@ -12,7 +12,7 @@ export function authRegistrationError(p:Record<string,unknown>):string|null {
  if(typeof p.companyName!=="string" || p.companyName.trim().length<2 || p.companyName.length>150 || /[\u0000-\u001f\u007f]/.test(p.companyName))return "نام شرکت یا فروشگاه باید ۲ تا ۱۵۰ نویسه باشد.";
  const province=IRAN_PROVINCES.find(item=>item.id===p.provinceId);
  if(!province || !province.cities.some(item=>item.id===p.cityId))return "استان و شهر معتبر و مرتبط انتخاب کنید.";
- if(typeof p.activityField!=="string" || !ACTIVITY_FIELDS.includes(p.activityField))return "زمینه فعالیت را از فهرست انتخاب کنید.";
+ if(typeof p.activityField!=="string" || !ACTIVITY_FIELDS.some(value=>value===p.activityField))return "زمینه فعالیت را از فهرست انتخاب کنید.";
  if(p.email && (typeof p.email!=="string" || p.email.length>254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)))return "ایمیل معتبر وارد کنید یا فیلد اختیاری را خالی بگذارید.";
  return null;
 }
