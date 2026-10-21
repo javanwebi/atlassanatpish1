@@ -1,3 +1,4 @@
+import {IRAN_PROVINCES,ACTIVITY_FIELDS} from '../../src/data/iranLocations';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type {IncomingMessage,ServerResponse} from 'node:http';
@@ -9,7 +10,8 @@ test('registration fails closed without SMS; credentials require a verified serv
  try {
   process.env.SUPABASE_URL='https://example.supabase.co';process.env.SUPABASE_PUBLISHABLE_KEY='test-publishable';process.env.SUPABASE_SMS_READY='false';
   for(const [body,status,pattern] of [
-   [{action:'register',payload:{mobile:'09120000001',password:'must-never-be-stored'}},503,/پیامک/],
+   [{action:'register',payload:{mobile:'abc'}},400,/۱۱/],
+   [{action:'register',payload:{firstName:'حسین',lastName:'طلبه',companyName:'صنعت پیش',provinceId:IRAN_PROVINCES[0].id,cityId:IRAN_PROVINCES[0].cities[0].id,activityField:ACTIVITY_FIELDS[0],mobile:'09120000001',password:'must-never-be-stored'}},503,/پیامک/],
    [{action:'registration_credentials',username:'attacker',password:'not-authorized'},401,/تأیید/],
    [{action:'otp_verify',phone:'09120000001',code:'123'},400,/شش/],
   ] as const){
