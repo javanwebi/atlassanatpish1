@@ -1,3 +1,4 @@
+import { authRegistrationError, mobileInput, identifierInput, personNameInput } from "../../utils/authValidation";
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -75,6 +76,8 @@ export function AccountAccess({
           (c) => c.id === city,
         )?.name,
       };
+      const invalid=authRegistrationError(registrationDetails);
+      if(invalid){setError(invalid);return;}
       setDetails(registrationDetails);
       setBusy(true);
       try {
@@ -146,8 +149,8 @@ export function AccountAccess({
     </label>
   );
   return (
-    <div className="account-access">
-      <aside className="account-access-story">
+    <div className="account-access" style={{direction:"ltr"}}>
+      <aside className="account-access-story" style={{direction:"rtl"}}>
         <img src={A.authIndustrialHero} alt="" />
         <div>
           <span className="account-symbol">
@@ -176,7 +179,7 @@ export function AccountAccess({
           </Link>
         </div>
       </aside>
-      <section className="account-access-form">
+      <section className="account-access-form" style={{direction:"rtl"}}>
         <div className="account-form-heading">
           <span className="store-eyebrow">
             با صنعت پیش، هوشمندانه پیش بروید
@@ -235,13 +238,18 @@ export function AccountAccess({
         {mode === "login" && method === "sms" ? (
           <PhoneLogin initialPhone={requiresVerification?details.mobile:undefined} initialSent={requiresVerification} onSuccess={(user,pending)=>{if(pending){setRequiresVerification(false);setMode('register');setStep(2);}else go(user);}} />
         ) : (
-          <form onSubmit={submit} className="account-fields">
+          <form onSubmit={submit} className="account-fields" onInputCapture={e=>{
+ const el=e.target;if(!(el instanceof HTMLInputElement))return;
+ if(el.name==="mobile")el.value=mobileInput(el.value);
+ else if(["firstName","lastName"].includes(el.name))el.value=personNameInput(el.value);
+ else if(["identifier","username"].includes(el.name))el.value=identifierInput(el.value);
+}}>
             {mode === "login" ? (
               <>
                 <label>
                   موبایل یا نام کاربری
                   <input
-                    name="identifier"
+                    name="identifier" maxLength={32} pattern="(?:09[0-9]{9}|[a-zA-Z][a-zA-Z0-9_]{3,31})"
                     autoComplete="username"
                     dir="ltr"
                     required
@@ -273,7 +281,7 @@ export function AccountAccess({
                       <label>
                         نام
                         <input
-                          name="firstName"
+                          name="firstName" minLength={2} maxLength={50}
                           autoComplete="given-name"
                           defaultValue={details.firstName}
                           required
@@ -282,7 +290,7 @@ export function AccountAccess({
                       <label>
                         نام خانوادگی
                         <input
-                          name="lastName"
+                          name="lastName" minLength={2} maxLength={50}
                           autoComplete="family-name"
                           defaultValue={details.lastName}
                           required
@@ -294,7 +302,11 @@ export function AccountAccess({
                       <input
                         name="mobile"
                         type="tel"
-                        inputMode="tel"
+                        inputMode="numeric"
+                        minLength={11}
+                        maxLength={11}
+                        pattern="09[0-9]{9}"
+                        title="شماره موبایل ۱۱ رقمی با شروع 09"
                         dir="ltr"
                         autoComplete="tel"
                         defaultValue={details.mobile}
@@ -305,7 +317,7 @@ export function AccountAccess({
                     <label>
                       نام شرکت، کارخانه یا فروشگاه
                       <input
-                        name="companyName"
+                        name="companyName" minLength={2} maxLength={150}
                         autoComplete="organization"
                         defaultValue={details.companyName}
                         required
@@ -370,7 +382,7 @@ export function AccountAccess({
                     <label>
                       ایمیل <small>اختیاری</small>
                       <input
-                        name="email"
+                        name="email" maxLength={254}
                         type="email"
                         dir="ltr"
                         autoComplete="email"
