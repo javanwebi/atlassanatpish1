@@ -1,3 +1,4 @@
+import {authRegistrationError,normalizeDigits} from "../../src/utils/authValidation";
 import {createClient,type Session} from '@supabase/supabase-js';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import crypto from 'node:crypto';
@@ -7,7 +8,7 @@ const error=(status:number,message:string)=>Object.assign(new Error(message),{st
 function client(){const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;if(!url || !key)throw error(503,'اتصال Supabase Auth هنوز کامل نشده است.');return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});}
 const cookie=(req:IncomingMessage,name:string)=>(req.headers.cookie || '').split(';').map(value=>value.trim()).find(value=>value.startsWith(name+'='))?.slice(name.length+1);
 function cookies(req:IncomingMessage,res:ServerResponse,session:Session|null){const secure=process.env.NODE_ENV==='production'?'; Secure':'';const values=[`sp_access=${session?.access_token || ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${session?.expires_in || 0}${secure}`,`sp_refresh=${session?.refresh_token || ''}; Path=/api/portal; HttpOnly; SameSite=Lax; Max-Age=${session?2592000:0}${secure}`];res.setHeader('Set-Cookie',values);req.headers.cookie=[...(req.headers.cookie || '').split(';').filter(value=>!/^\s*sp_(access|refresh)=/.test(value)),`sp_access=${session?.access_token || ''}`,`sp_refresh=${session?.refresh_token || ''}`].join(';');}
-function phone(raw:string){const value=String(raw || '').replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[\s()-]/g,'').replace(/^(\+98|0098|98)/,'0');if(!/^09\d{9}$/.test(value))throw error(400,'شماره موبایل معتبر وارد کنید.');return {local:value,e164:'+98'+value.slice(1)};}
+function phone(raw:string){const value=normalizeDigits(String(raw || '')).replace(/[\s()-]/g,'').replace(/^(\+98|0098|98)/,'0');if(!/^09\d{9}$/.test(value))throw error(400,'شماره موبایل معتبر وارد کنید.');return {local:value,e164:'+98'+value.slice(1)};}
 export async function supabaseIdentity(req:IncomingMessage,db:{users:any[]}){
  const token=cookie(req,'sp_access');if(!token)return {admin:false};
  const result=await client().auth.getUser(token);if(result.error){if(result.error.status && result.error.status>=500)throw error(503,'بررسی ورود در دسترس نیست.');return {admin:false};}
@@ -21,8 +22,12 @@ export async function supabaseAuthAction(req:IncomingMessage,res:ServerResponse,
  const auth=client();
  if(body.action==='logout'){const access=cookie(req,'sp_access'),refresh=cookie(req,'sp_refresh');if(access && refresh){const sdk=client();await sdk.auth.setSession({access_token:access,refresh_token:refresh});await sdk.auth.signOut({scope:'local'});}cookies(req,res,null);send(200,{success:true});return true;}
  if(body.action==='register'){
+
+  const p=body.payload || {};
+  const invalid=authRegistrationError(p);if(invalid)throw error(400,invalid);
+  const number=phone(p.mobile);
+  for(const field of ['firstName','lastName','companyName','email'])if(typeof p[field]==='string')p[field]=p[field].trim();
   if(process.env.SUPABASE_SMS_READY!=='true')throw error(503,'سرویس پیامک هنوز فعال نشده است؛ ثبت‌نام پس از اتصال سرویس پیامک امکان‌پذیر است.');
-  const p=body.payload || {},number=phone(p.mobile);
   for(const field of ['firstName','lastName','companyName','provinceId','cityId','activityField'])if(typeof p[field]!=='string' || !p[field].trim() || p[field].length>300)throw error(400,'تمام اطلاعات الزامی را کامل کنید.');
   const existing=await database().query('select id from public.user_profiles where phone=$1 or phone=$2',[number.local,number.e164]);
   if(existing.rowCount)throw error(409,'این شماره قبلاً ثبت شده است؛ از بخش ورود استفاده کنید.');
@@ -53,8 +58,8 @@ export async function supabaseAuthAction(req:IncomingMessage,res:ServerResponse,
  }
  if(body.action==='otp_request'){if(process.env.SUPABASE_SMS_READY!=='true')throw error(503,'سرویس پیامک هنوز فعال نشده است.');const number=phone(body.phone);const result=await auth.auth.signInWithOtp({phone:number.e164,options:{shouldCreateUser:false}});if(result.error)throw error(400,'ارسال کد انجام نشد؛ شماره و تنظیمات پیامک Supabase Auth را بررسی کنید.');send(200,{success:true,retryAfter:60,message:'اگر حساب فعال وجود داشته باشد، کد تأیید ارسال می‌شود.'});return true;}
  let session:Session|null=null;
- if(body.action==='otp_verify'){if(!/^[0-9۰-۹]{6}$/.test(String(body.code || '')))throw error(400,'کد تأیید شش‌رقمی وارد کنید.');const result=await auth.auth.verifyOtp({phone:phone(body.phone).e164,token:String(body.code || '').replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))),type:'sms'});if(result.error)throw error(401,'کد واردشده معتبر نیست.');session=result.data.session;}
- else{const db=await readPortal();const identifier=String(body.identifier || body.username || '').trim().toLowerCase();const profile=db.users.find(user=>user.username?.toLowerCase()===identifier || user.phone===identifier);if(!profile?.authUserId)throw error(401,'ورود معتبر نیست یا انتقال حساب به Supabase Auth باید تکمیل شود.');const result=await auth.auth.signInWithPassword({phone:phone(profile.phone).e164,password:String(body.password || '')});if(result.error)throw error(401,'نام کاربری یا رمز عبور معتبر نیست؛ در صورت نیاز از ورود پیامکی استفاده کنید.');session=result.data.session;}
+ if(body.action==='otp_verify'){if(!/^[0-9]{6}$/.test(normalizeDigits(String(body.code || ''))))throw error(400,'کد تأیید شش‌رقمی وارد کنید.');const result=await auth.auth.verifyOtp({phone:phone(body.phone).e164,token:normalizeDigits(String(body.code || '')),type:'sms'});if(result.error)throw error(401,'کد واردشده معتبر نیست.');session=result.data.session;}
+ else{const db=await readPortal();const identifier=normalizeDigits(String(body.identifier || body.username || '').trim()).toLowerCase();if(!/^(?:09[0-9]{9}|[a-z][a-z0-9_]{3,31})$/.test(identifier) || typeof body.password!=='string' || !body.password.length || body.password.length>128)throw error(400,'موبایل یا نام کاربری و رمز عبور معتبر وارد کنید.');const profile=db.users.find(user=>user.username?.toLowerCase()===identifier || user.phone===identifier);if(!profile?.authUserId)throw error(401,'ورود معتبر نیست یا انتقال حساب به Supabase Auth باید تکمیل شود.');const result=await auth.auth.signInWithPassword({phone:phone(profile.phone).e164,password:String(body.password || '')});if(result.error)throw error(401,'نام کاربری یا رمز عبور معتبر نیست؛ در صورت نیاز از ورود پیامکی استفاده کنید.');session=result.data.session;}
  if(!session)throw error(401,'نشست ورود ایجاد نشد.');cookies(req,res,session);
  // Consume only the draft bound to the verified browser and matching verified phone.
  const draftId=cookie(req,'sp_registration');
