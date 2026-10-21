@@ -6,7 +6,7 @@ export class AuthService {
   static async register(payload: RegisterPayload): Promise<AuthResponse> {
     try {
       const data = await portalRequest({ action: "register", payload });
-      await hydratePortal();
+      if (!data.requiresPhoneVerification) await hydratePortal();
       return data;
     } catch (e: any) {
       return { success: false, message: e.message };
