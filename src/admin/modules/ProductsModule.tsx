@@ -813,6 +813,20 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
         products={products}
         categories={categories}
         onCreateCategory={()=>handleOpenCategoryModal()}
+        onCreateSku={(code,file,imageUrl,imageTitle)=>{
+          const product=products.find(p=>p.code===code);if(!product)return;
+          handleOpenEditFamily(product,'variants');
+          setDraftFamily(previous=>{
+            if(!previous)return previous;
+            const url=imageUrl||getProductImageUrl(file);
+            const gallery=previous.galleryImages||[];
+            if(gallery.some(image=>image.url===url))return previous;
+            return {...previous,galleryImages:[...gallery,{
+              id:`review-draft-${file}`,url,fileName:file,scope:'family',
+              identityVerified:false,title:imageTitle?.trim()||'تصویر در انتظار انتخاب کد کالا',order:gallery.length+1
+            }],images:[...(previous.images||[]),url]};
+          });
+        }}
         onCreateFamily={(file,category,subcategory,imageUrl,imageTitle)=>{
           handleOpenNewFamily();
           setDraftFamily(previous=>previous?{
