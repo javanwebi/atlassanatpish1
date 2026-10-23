@@ -905,7 +905,9 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
         </div>
 
         {/* Flagship Sample Quick Bar: چرخ دنده (FAM-34265 & FAM-80301) */}
-        <div className="p-3.5 rounded-xl bg-orange-50/70 border border-orange-200/90 flex flex-wrap items-center justify-between gap-3">
+        <details className="rounded-xl border border-orange-200/90 bg-orange-50/40">
+          <summary className="cursor-pointer select-none px-4 py-3 text-xs font-bold text-[#55565A]">نمونهٔ راهنما برای یادگیری کار با خانواده و کد کالا (اختیاری)</summary>
+          <div className="p-3.5 rounded-xl bg-orange-50/70 flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-0.5">
             <div className="text-xs font-black text-[#37383b] flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-[#E06518]" />
@@ -945,7 +947,8 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
               <span>مشاهده صفحهٔ «چرخ دنده» در سایت</span>
             </Link>
           </div>
-        </div>
+          </div>
+        </details>
       </div>
 
       {/* 2. PRODUCTS & SKU FAMILIES TAB */}
