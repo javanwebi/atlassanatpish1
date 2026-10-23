@@ -1499,9 +1499,7 @@ async function buildImageFeatureIndex(): Promise<void> {
   }
 }
 
-// Build in background so server startup isn't blocked on first run
-void buildImageFeatureIndex();
-void buildImageEmbeddingIndex();
+// Indices are initialized after database products and metadata have been hydrated.
 
 function brandForCatalogItem(item: CatalogItem): string {
   const itemName = item.name.toLowerCase();
@@ -6471,6 +6469,8 @@ async function start() {
   }
   refreshRecognitionCatalog();
   console.log(`[Server] Loaded ${CATALOG_ITEMS.length} real inventory SKUs for recognition.`);
+  void buildImageFeatureIndex();
+  void buildImageEmbeddingIndex();
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
