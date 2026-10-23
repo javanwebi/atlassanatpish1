@@ -2358,6 +2358,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                       ))}
                     </div>
                     </div>
+                    </div>
                     </details>
                   </div>
                 </div>
