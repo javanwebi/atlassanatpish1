@@ -1,11 +1,17 @@
 import { createHash } from 'node:crypto';
 import type { Product } from '../types';
-import review from '../../docs/product-image-review.json';
-import ownerPhotos from '../data/ownerCataloguePhotos.json';
 
 export interface ImageBinding { familyCode:string; code?:string; verified:boolean; }
 export interface CatalogImageRecord {id:string;url:string;label:string;revision:string;bindings:ImageBinding[];}
-const headings=new Map(ownerPhotos.items.map(item=>[item.file,item.catalogueGroup]));
+export interface CatalogImageAuditRow {file_name:string;image_url?:string|null;sha256?:string|null;observed_description?:string|null;}
+export interface CatalogImageOwnerRow {file_name:string;catalogue_group?:string|null;}
+let auditRows:CatalogImageAuditRow[]=[];
+let headings=new Map<string,string>();
+/** Call once after loading the authoritative database tables; no bundled JSON fallback. */
+export function installCatalogImageMetadata(audits:CatalogImageAuditRow[],owners:CatalogImageOwnerRow[]){
+ auditRows=audits;
+ headings=new Map(owners.filter(row=>row.catalogue_group).map(row=>[row.file_name,row.catalogue_group!]));
+}
 export function officialImageFile(value:string): string | undefined {
   try {
     const text=decodeURIComponent(value.trim());
@@ -21,8 +27,8 @@ export function officialImageFile(value:string): string | undefined {
 /** The corpus includes all 869 photos, including photos with no SKU association. */
 export function buildCatalogImageCorpus(products:Product[], revision=''):CatalogImageRecord[] {
   const images=new Map<string,CatalogImageRecord>();
-  for(const item of review.items) images.set(item.file,{id:item.file,url:`https://raw.githubusercontent.com/javanweb/imagesatlas/main/${item.file}`,
-    label:headings.get(item.file) || item.observed,revision:item.sha256,bindings:[]});
+  for(const item of auditRows) images.set(item.file_name,{id:item.file_name,url:item.image_url || `https://raw.githubusercontent.com/javanweb/imagesatlas/main/${item.file_name}`,
+    label:headings.get(item.file_name) || item.observed_description || item.file_name,revision:item.sha256 || revision,bindings:[]});
   const add=(url:string,binding:ImageBinding,label:string)=>{
     if(!url || /^blob:/i.test(url))return;
     const key=officialImageFile(url) || `upload-${createHash('sha256').update(url).digest('hex').slice(0,24)}`;
