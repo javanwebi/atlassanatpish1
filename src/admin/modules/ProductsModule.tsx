@@ -809,17 +809,56 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
 
   return (
     <div className="space-y-6 text-right" dir="rtl">
-      <ProductImageAudit products={products} onEdit={(code,file)=>{
-        const product=products.find(p=>p.code===code);if(!product)return;
-        handleOpenEditFamily(product,'images');
-        setDraftFamily(previous=>{
-          if(!previous)return previous;
-          const gallery=previous.galleryImages||[];
-          const url=getProductImageUrl(file);
-          if(gallery.some(image=>image.url===url))return previous;
-          return {...previous,galleryImages:[...gallery,{id:`review-${file}`,url,fileName:file,scope:'family',title:'تصویر در انتظار بررسی کد کالا',order:gallery.length+1}],images:[...(previous.images||[]),url]};
-        });
-      }} />
+      <ProductImageAudit
+        products={products}
+        categories={categories}
+        onCreateCategory={()=>handleOpenCategoryModal()}
+        onCreateSku={(code,file,imageUrl,imageTitle)=>{
+          const product=products.find(p=>p.code===code);if(!product)return;
+          handleOpenEditFamily(product,'variants');
+          setDraftFamily(previous=>{
+            if(!previous)return previous;
+            const url=imageUrl||getProductImageUrl(file);
+            const gallery=previous.galleryImages||[];
+            if(gallery.some(image=>image.url===url))return previous;
+            return {...previous,galleryImages:[...gallery,{
+              id:`review-draft-${file}`,url,fileName:file,scope:'family',
+              identityVerified:false,title:imageTitle?.trim()||'تصویر در انتظار انتخاب کد کالا',order:gallery.length+1
+            }],images:[...(previous.images||[]),url]};
+          });
+        }}
+        onCreateFamily={(file,category,subcategory,imageUrl,imageTitle)=>{
+          handleOpenNewFamily();
+          setDraftFamily(previous=>previous?{
+            ...previous,
+            categoryName:category||previous.categoryName,
+            categorySlug:category?category.replace(/\\s+/g,'-'):previous.categorySlug,
+            subcategory:subcategory||previous.subcategory,
+            images:[...(previous.images||[]),imageUrl||getProductImageUrl(file)],
+            galleryImages:[...(previous.galleryImages||[]),{
+              id:`review-new-${file}`,url:imageUrl||getProductImageUrl(file),fileName:file,scope:'family',
+              identityVerified:false,title:imageTitle?.trim()||'تصویر نیازمند تطبیق با مشخصات کالا',order:1
+            }]
+          }:previous);
+          setEditorTab('family');
+        }}
+        onEdit={(code,file,skuCode,imageUrl,imageTitle)=>{
+          const product=products.find(p=>p.code===code);if(!product)return;
+          handleOpenEditFamily(product,skuCode?'variants':'images');
+          if(skuCode)setEditingVariantCode(skuCode);
+          setDraftFamily(previous=>{
+            if(!previous)return previous;
+            const gallery=previous.galleryImages||[];
+            const url=imageUrl||getProductImageUrl(file);
+            if(gallery.some(image=>image.url===url))return previous;
+            return {...previous,galleryImages:[...gallery,{
+              id:`review-${file}`,url,fileName:file,
+              scope:skuCode?'variant':'family',variantCode:skuCode,
+              identityVerified:false,title:imageTitle?.trim()||'تصویر در انتظار بررسی کد و مشخصات',order:gallery.length+1
+            }],images:skuCode?[...(previous.images||[])]:[...(previous.images||[]),url]};
+          });
+        }}
+      />
       {/* 1. HEADER & GLOBAL STATS */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
