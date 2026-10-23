@@ -10,9 +10,9 @@ type FamilyCategory={name:string;subcategories?:string[]};
 export function ProductImageAudit({products,categories,onEdit,onCreateCategory,onCreateFamily}:{
   products:Product[];
   categories:FamilyCategory[];
-  onEdit:(familyCode:string,file:string,skuCode?:string,imageUrl?:string)=>void;
+  onEdit:(familyCode:string,file:string,skuCode?:string,imageUrl?:string,imageTitle?:string)=>void;
   onCreateCategory:()=>void;
-  onCreateFamily:(file:string,category:string,subcategory:string,imageUrl?:string)=>void;
+  onCreateFamily:(file:string,category:string,subcategory:string,imageUrl?:string,imageTitle?:string)=>void;
 }) {
   const [query,setQuery]=useState('');const [status,setStatus]=useState('all');const [page,setPage]=useState(0);
   const [selected,setSelected]=useState<string|null>(null);
@@ -48,7 +48,7 @@ export function ProductImageAudit({products,categories,onEdit,onCreateCategory,o
   const openEditor=()=>{
     if(!selectedFamily||!selected)return;
     if(location==='sku'&&!selectedSku)return;
-    onEdit(selectedFamily,selected,location==='sku'?selectedSku:undefined,selectedUrl);
+    onEdit(selectedFamily,selected,location==='sku'?selectedSku:undefined,selectedUrl,imageTitle);
     setSelected(null);
   };
   const openNewImage=()=>{setSelected(null);setSelectedUrl('');setImageTitle('');setSourceMode('upload');setSourceError('');setSelectedFamily('');setSelectedCategory('');setSelectedSubcategory('');setSelectedSku('');setLocation('family')};
@@ -136,7 +136,7 @@ export function ProductImageAudit({products,categories,onEdit,onCreateCategory,o
             <option value="">خانواده را انتخاب کنید...</option>
             {families.map(f=><option key={f.code} value={f.code}>{f.name} — {f.code}</option>)}
           </select>
-          <button type="button" className="text-xs text-[#C65A16] underline" onClick={()=>{if(selected){onCreateFamily(selected,selectedCategory,selectedSubcategory,selectedUrl);setSelected(null)}}}>+ تعریف خانواده و کالای جدید برای همین تصویر</button>
+          <button type="button" className="text-xs text-[#C65A16] underline" onClick={()=>{if(selected){onCreateFamily(selected,selectedCategory,selectedSubcategory,selectedUrl,imageTitle);setSelected(null)}}}>+ تعریف خانواده و کالای جدید برای همین تصویر</button>
         </div>
         {currentFamily&&<div className="rounded-xl border border-[#F4D4BE] bg-[#FFF9F5] p-3 space-y-3">
           <strong className="text-xs text-[#55565A]">۴. محل اتصال تصویر</strong>
