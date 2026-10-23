@@ -13,10 +13,9 @@ import { CatalogVisualIndex } from './src/services/catalogVisualIndex';
 import { RecognitionServiceError } from './src/services/recognitionErrors';
 import { createVisionImagePublisher, cleanVisionImageLinks, type ImagePublisher } from './src/services/visionImageLinks';
 import { lookup } from 'node:dns/promises';
-import { buildCatalogImageCorpus, corpusFingerprint, officialImageFile } from './src/services/catalogImageCorpus';
+import { buildCatalogImageCorpus, corpusFingerprint, officialImageFile, installCatalogImageMetadata } from './src/services/catalogImageCorpus';
 import { scanEveryCatalogImage, type ScanProgress } from './src/services/exhaustiveImageScan';
 import { RecognitionJobs } from './src/services/recognitionJobs';
-import inventorySource from './src/data/catalogueSource.json';
 import { workerVision } from './src/services/partRecognitionGateway';
 import { recognitionWorkerUrl, recognitionApiKey, recognitionCatalog, finalizeRecognition } from './src/utils/recognitionPolicy';
 import {findCatalogKnowledge,catalogFallback} from './src/utils/catalogKnowledge';
@@ -571,7 +570,7 @@ interface CatalogItem {
 // Load real inventory identifiers, never the synthetic legacy summary.
 let CATALOG_ITEMS: CatalogItem[] = [];
 
-const inventoryCodes=new Set<string>(databaseEnabled()?[]:inventorySource.flatMap(family=>family.variants.map(v=>v.code)));
+const inventoryCodes=new Set<string>();
 function recognitionProducts() {
   const overrides=loadCatalogOverridesDb();
   const deleted=new Set(overrides.deletedCodes);
@@ -836,6 +835,19 @@ async function jinaEmbedImages(buffers: Buffer[], task: 'retrieval.query' | 'ret
 // and a Jina key is configured.
 async function buildImageEmbeddingIndex(): Promise<void> {
   try {
+    if (databaseEnabled()) {
+      const rows=(await database().query("select file_name,embedding::text as vector from public.catalog_image_features where embedding is not null")).rows;
+      for(const row of rows) {
+        const emb=String(row.vector || '').replace(/^\\[/,'').replace(/\\]$/,'').split(',').map(Number);
+        if(!emb.length || emb.some(value=>!Number.isFinite(value)))continue;
+        IMAGE_EMB_INDEX.set(row.file_name,emb);
+        const normalized=normalizeCatalogImageKey(row.file_name);
+        if(normalized)IMAGE_EMB_INDEX.set(normalized,emb);
+      }
+      embIndexReady=IMAGE_EMB_INDEX.size>0;
+      console.log('[Server] PostgreSQL image embeddings loaded:',rows.length);
+      return;
+    }
     if (fs.existsSync(IMAGE_EMB_CACHE_PATH)) {
       const cached = JSON.parse(fs.readFileSync(IMAGE_EMB_CACHE_PATH, 'utf8')) as {
         version: number;
@@ -1430,6 +1442,27 @@ function gridDistance(a: ImageFeatures, b: ImageFeatures): number {
 async function buildImageFeatureIndex(): Promise<void> {
   try {
     buildCatalogImageAliases();
+    if (databaseEnabled()) {
+      const rows = (await database().query(`select file_name,raw_dh,raw_ph,raw_ah,raw_eh,raw_aspect,raw_col,raw_radial,raw_hog,raw_hu,raw_grid,
+        clean_dh,clean_ph,clean_ah,clean_eh,clean_aspect,clean_col,clean_radial,clean_hog,clean_hu,clean_grid
+        from public.catalog_image_features`)).rows;
+      for (const row of rows) {
+        const parse=(prefix:'raw'|'clean'):ImageFeatures=>({
+          dh:row[prefix+'_dh'],ph:row[prefix+'_ph'],ah:row[prefix+'_ah'],eh:row[prefix+'_eh'],
+          aspect:row[prefix+'_aspect'],col:row[prefix+'_col'] || [],
+          radial:row[prefix+'_radial'] || [],hog:row[prefix+'_hog'] || [],
+          hu:row[prefix+'_hu'] || [],grid:row[prefix+'_grid'] || []
+        });
+        if (!row.raw_dh || !row.clean_dh) continue;
+        const feat={raw:parse('raw'),clean:parse('clean')};
+        IMAGE_FEATURE_INDEX.set(row.file_name,feat);
+        const normalized=normalizeCatalogImageKey(row.file_name);
+        if(normalized) IMAGE_FEATURE_INDEX.set(normalized,feat);
+      }
+      visualIndexReady=IMAGE_FEATURE_INDEX.size>0;
+      console.log('[Server] PostgreSQL visual features loaded:',rows.length);
+      return;
+    }
 
     // 1) Try loading cache (v2 multi-feature format)
     if (fs.existsSync(IMAGE_HASH_CACHE_PATH)) {
@@ -1500,9 +1533,7 @@ async function buildImageFeatureIndex(): Promise<void> {
   }
 }
 
-// Build in background so server startup isn't blocked on first run
-void buildImageFeatureIndex();
-void buildImageEmbeddingIndex();
+// Indices are initialized after database products and metadata have been hydrated.
 
 function brandForCatalogItem(item: CatalogItem): string {
   const itemName = item.name.toLowerCase();
@@ -6460,12 +6491,20 @@ async function start() {
     await database().query('select revision from app_private.portal_version');
     const products=await readProducts();if(!products.length)throw new Error('Database catalogue is empty; run the reviewed importer first');
     installDatabaseProducts(products);
+    const [imageAudits, ownerPhotos] = await Promise.all([
+      database().query('select file_name,image_url,sha256,observed_description from public.catalog_image_audits order by file_name'),
+      database().query('select file_name,catalogue_group from public.owner_catalogue_photos order by file_name'),
+    ]);
+    if (imageAudits.rows.length === 0) throw new Error('Database image audit corpus is empty; refusing bundled JSON fallback');
+    installCatalogImageMetadata(imageAudits.rows, ownerPhotos.rows);
     const saved=await readDocument(database(),'catalog_overrides/runtime','global','catalog_overrides');
     CATALOG_OVERRIDES_CACHE=saved || {version:1,updatedAt:'',deletedCodes:[],families:{}};
     inventoryCodes.clear();for(const product of products)for(const variant of product.variants || [])inventoryCodes.add(variant.code);
   }
   refreshRecognitionCatalog();
   console.log(`[Server] Loaded ${CATALOG_ITEMS.length} real inventory SKUs for recognition.`);
+  void buildImageFeatureIndex();
+  void buildImageEmbeddingIndex();
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
