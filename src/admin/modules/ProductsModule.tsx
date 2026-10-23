@@ -813,7 +813,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
         products={products}
         categories={categories}
         onCreateCategory={()=>handleOpenCategoryModal()}
-        onCreateFamily={(file,category,subcategory,imageUrl)=>{
+        onCreateFamily={(file,category,subcategory,imageUrl,imageTitle)=>{
           handleOpenNewFamily();
           setDraftFamily(previous=>previous?{
             ...previous,
@@ -823,12 +823,12 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
             images:[...(previous.images||[]),imageUrl||getProductImageUrl(file)],
             galleryImages:[...(previous.galleryImages||[]),{
               id:`review-new-${file}`,url:imageUrl||getProductImageUrl(file),fileName:file,scope:'family',
-              identityVerified:false,title:'تصویر نیازمند تطبیق با مشخصات کالا',order:1
+              identityVerified:false,title:imageTitle?.trim()||'تصویر نیازمند تطبیق با مشخصات کالا',order:1
             }]
           }:previous);
           setEditorTab('family');
         }}
-        onEdit={(code,file,skuCode,imageUrl)=>{
+        onEdit={(code,file,skuCode,imageUrl,imageTitle)=>{
           const product=products.find(p=>p.code===code);if(!product)return;
           handleOpenEditFamily(product,skuCode?'variants':'images');
           if(skuCode)setEditingVariantCode(skuCode);
@@ -840,7 +840,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
             return {...previous,galleryImages:[...gallery,{
               id:`review-${file}`,url,fileName:file,
               scope:skuCode?'variant':'family',variantCode:skuCode,
-              identityVerified:false,title:'تصویر در انتظار بررسی کد و مشخصات',order:gallery.length+1
+              identityVerified:false,title:imageTitle?.trim()||'تصویر در انتظار بررسی کد و مشخصات',order:gallery.length+1
             }],images:skuCode?[...(previous.images||[])]:[...(previous.images||[]),url]};
           });
         }}
