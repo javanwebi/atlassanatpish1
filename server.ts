@@ -835,6 +835,19 @@ async function jinaEmbedImages(buffers: Buffer[], task: 'retrieval.query' | 'ret
 // and a Jina key is configured.
 async function buildImageEmbeddingIndex(): Promise<void> {
   try {
+    if (databaseEnabled()) {
+      const rows=(await database().query("select file_name,embedding::text as vector from public.catalog_image_features where embedding is not null")).rows;
+      for(const row of rows) {
+        const emb=String(row.vector || '').replace(/^\\[/,'').replace(/\\]$/,'').split(',').map(Number);
+        if(!emb.length || emb.some(value=>!Number.isFinite(value)))continue;
+        IMAGE_EMB_INDEX.set(row.file_name,emb);
+        const normalized=normalizeCatalogImageKey(row.file_name);
+        if(normalized)IMAGE_EMB_INDEX.set(normalized,emb);
+      }
+      embIndexReady=IMAGE_EMB_INDEX.size>0;
+      console.log('[Server] PostgreSQL image embeddings loaded:',rows.length);
+      return;
+    }
     if (fs.existsSync(IMAGE_EMB_CACHE_PATH)) {
       const cached = JSON.parse(fs.readFileSync(IMAGE_EMB_CACHE_PATH, 'utf8')) as {
         version: number;
@@ -1429,6 +1442,27 @@ function gridDistance(a: ImageFeatures, b: ImageFeatures): number {
 async function buildImageFeatureIndex(): Promise<void> {
   try {
     buildCatalogImageAliases();
+    if (databaseEnabled()) {
+      const rows = (await database().query(`select file_name,raw_dh,raw_ph,raw_ah,raw_eh,raw_aspect,raw_col,raw_radial,raw_hog,raw_hu,raw_grid,
+        clean_dh,clean_ph,clean_ah,clean_eh,clean_aspect,clean_col,clean_radial,clean_hog,clean_hu,clean_grid
+        from public.catalog_image_features`)).rows;
+      for (const row of rows) {
+        const parse=(prefix:'raw'|'clean'):ImageFeatures=>({
+          dh:row[prefix+'_dh'],ph:row[prefix+'_ph'],ah:row[prefix+'_ah'],eh:row[prefix+'_eh'],
+          aspect:row[prefix+'_aspect'],col:row[prefix+'_col'] || [],
+          radial:row[prefix+'_radial'] || [],hog:row[prefix+'_hog'] || [],
+          hu:row[prefix+'_hu'] || [],grid:row[prefix+'_grid'] || []
+        });
+        if (!row.raw_dh || !row.clean_dh) continue;
+        const feat={raw:parse('raw'),clean:parse('clean')};
+        IMAGE_FEATURE_INDEX.set(row.file_name,feat);
+        const normalized=normalizeCatalogImageKey(row.file_name);
+        if(normalized) IMAGE_FEATURE_INDEX.set(normalized,feat);
+      }
+      visualIndexReady=IMAGE_FEATURE_INDEX.size>0;
+      console.log('[Server] PostgreSQL visual features loaded:',rows.length);
+      return;
+    }
 
     // 1) Try loading cache (v2 multi-feature format)
     if (fs.existsSync(IMAGE_HASH_CACHE_PATH)) {
