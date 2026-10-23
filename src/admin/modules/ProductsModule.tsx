@@ -1534,9 +1534,9 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
           CATEGORY ADD / EDIT MODAL
          ===================================================================== */}
       {isCategoryModalOpen && editingCategory && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-xl rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-xl max-h-[100dvh] sm:max-h-[92vh] rounded-none sm:rounded-3xl border-0 sm:border border-slate-200 shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-5 py-4 bg-white text-[#55565A] border-b border-slate-200 flex items-center justify-between shrink-0">
               <h3 className="text-sm font-black flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[#E06518]" />
                 <span>
@@ -1548,66 +1548,26 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
               <button
                 type="button"
                 onClick={() => setIsCategoryModalOpen(false)}
-                className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
               >
                 بستن
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-4 text-xs overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">نام فارسی دسته‌بندی *</label>
-                  <input
-                    type="text"
-                    value={editingCategory.name}
-                    onChange={e =>
-                      setEditingCategory({ ...editingCategory, name: e.target.value })
-                    }
-                    placeholder="مثلاً: تسمه‌های صنعتی یا چرخ‌دنده‌ها"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold"
-                  />
+                  <input type="text" value={editingCategory.name} onChange={e => setEditingCategory({ ...editingCategory, name: e.target.value })} placeholder="مثلاً: تسمه‌های صنعتی یا چرخ‌دنده‌ها" className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold" />
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">نام انگلیسی</label>
-                  <input
-                    type="text"
-                    dir="ltr"
-                    value={editingCategory.nameEn}
-                    onChange={e =>
-                      setEditingCategory({ ...editingCategory, nameEn: e.target.value })
-                    }
-                    placeholder="Industrial Belts"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">شناسه مسیر (Slug)</label>
-                  <input
-                    type="text"
-                    dir="ltr"
-                    value={editingCategory.slug}
-                    onChange={e =>
-                      setEditingCategory({ ...editingCategory, slug: e.target.value })
-                    }
-                    placeholder="industrial-belts"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">تعداد خانواده محصول</label>
-                  <input
-                    type="number"
-                    value={editingCategory.count || 0}
-                    onChange={e =>
-                      setEditingCategory({
-                        ...editingCategory,
-                        count: Number(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono"
-                  />
-                </div>
+                <details className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <summary className="cursor-pointer select-none font-bold text-slate-700">تنظیمات تکمیلی (اختیاری): نام انگلیسی، شناسه مسیر و تعداد</summary>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    <div><label className="block font-bold text-slate-700 mb-1">نام انگلیسی</label><input type="text" dir="ltr" value={editingCategory.nameEn} onChange={e => setEditingCategory({ ...editingCategory, nameEn: e.target.value })} placeholder="Industrial Belts" className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono" /></div>
+                    <div><label className="block font-bold text-slate-700 mb-1">شناسه مسیر (Slug)</label><input type="text" dir="ltr" value={editingCategory.slug} onChange={e => setEditingCategory({ ...editingCategory, slug: e.target.value })} placeholder="industrial-belts" className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono" /></div>
+                    <div><label className="block font-bold text-slate-700 mb-1">تعداد خانواده محصول</label><input type="number" value={editingCategory.count || 0} onChange={e => setEditingCategory({ ...editingCategory, count: Number(e.target.value) || 0 })} className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono" /></div>
+                  </div>
+                </details>
               </div>
 
               <div>
@@ -1694,7 +1654,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="sticky bottom-0 bg-white flex justify-end gap-2 pt-3 pb-1 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsCategoryModalOpen(false)}
@@ -1719,9 +1679,9 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
           VISUAL BRAND ADD / EDIT MODAL (IMAGE-FIRST FOR CUSTOMER RECOGNITION)
          ===================================================================== */}
       {isBrandModalOpen && editingBrand && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-3xl rounded-3xl border border-slate-200 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-3xl rounded-none sm:rounded-3xl border-0 sm:border border-slate-200 shadow-2xl overflow-hidden max-h-[100dvh] sm:max-h-[92vh] flex flex-col">
+            <div className="px-5 py-4 bg-white text-[#55565A] border-b border-slate-200 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-sm font-black flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-[#E06518]" />
@@ -1731,7 +1691,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                       : 'افزودن برند تصویری جدید به سایت'}
                   </span>
                 </h3>
-                <p className="text-[11px] text-slate-300 mt-0.5">
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   تصویر و نشان تجاری برند برای شناخت سریع مشتری در صفحه اصلی و کاتالوگ نمایش داده می‌شود
                 </p>
               </div>
@@ -1744,11 +1704,11 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-5 text-xs">
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-5 text-xs">
               {/* Top Section: Live Visual Brand Preview + Image Upload Controls */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                <div className="md:col-span-5 flex flex-col items-center justify-center bg-slate-900 rounded-2xl p-4 text-white relative overflow-hidden">
-                  <span className="text-[10px] text-amber-400 font-bold mb-2">
+                <div className="md:col-span-5 flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 p-4 text-[#55565A] relative overflow-hidden">
+                  <span className="text-[10px] text-[#E06518] font-bold mb-2">
                     پیش‌نمایش کارت تصویری برند برای مشتری
                   </span>
                   <div className="w-44 h-28 bg-white rounded-xl p-2.5 flex items-center justify-center shadow-lg mb-2.5">
@@ -1765,7 +1725,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                   <div className="font-black text-sm text-center">
                     {editingBrand.name || 'نام فارسی برند'}
                   </div>
-                  <div className="text-[11px] text-slate-300 font-mono">
+                  <div className="text-[11px] text-slate-500 font-mono">
                     {editingBrand.nameEn || 'BRAND NAME'} • {editingBrand.country}
                   </div>
                 </div>
@@ -1811,6 +1771,8 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                     />
                   </div>
 
+                  <details className="rounded-xl border border-slate-200 bg-white p-3">
+                    <summary className="cursor-pointer select-none font-bold text-slate-700">روش‌های دیگر انتخاب تصویر (لینک و نشان‌های آماده)</summary>
                   <div>
                     <label className="block font-bold text-slate-600 mb-1">
                       یا لینک مستقیم تصویر برند (URL / Data URI):
@@ -1860,6 +1822,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                       ))}
                     </div>
                   </div>
+                  </details>
                 </div>
               </div>
 
@@ -1902,6 +1865,9 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                 </div>
               </div>
 
+              <details className="rounded-xl border border-slate-200 bg-white">
+                <summary className="cursor-pointer select-none px-4 py-3 font-bold text-slate-700">اطلاعات تکمیلی برند (اختیاری): معرفی و حوزه‌های تخصصی</summary>
+                <div className="p-4 space-y-4">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
                   معرفی و توضیحات برند برای شناخت مشتری
@@ -1974,6 +1940,10 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                 </div>
               </div>
 
+
+                </div>
+              </details>
+
               {/* Toggles */}
               <div className="flex flex-wrap items-center justify-between gap-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
                 <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
@@ -2026,13 +1996,13 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
           TWO-LEVEL FAMILY & SKU EDITOR MODAL
          ===================================================================== */}
       {isEditorOpen && draftFamily && (
-        <div role="dialog" aria-modal="true" aria-label="ویرایش خانواده محصول" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-6xl rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
+        <div role="dialog" aria-modal="true" aria-label="ویرایش خانواده محصول" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-6xl rounded-none sm:rounded-3xl border-0 sm:border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[100dvh] sm:max-h-[94vh]">
             {/* Modal Top Header */}
             <div className="px-5 py-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs bg-white/15 px-2.5 py-0.5 rounded-lg" dir="ltr">
+                  <span className="font-mono text-xs bg-[#FFF2E8] text-[#B94D0A] px-2.5 py-1 rounded-lg" dir="ltr">
                     {draftFamily.code}
                   </span>
                   <h3 className="text-base font-black">
@@ -2063,7 +2033,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                 <button
                   type="button"
                   onClick={() => setIsEditorOpen(false)}
-                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer transition-colors"
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
                 >
                   بستن
                 </button>
