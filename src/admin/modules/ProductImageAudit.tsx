@@ -7,12 +7,13 @@ import { normalizeCatalogueText } from '../../data/userProducts';
 import { Modal } from '../../components/ui/Modal';
 
 type FamilyCategory={name:string;subcategories?:string[]};
-export function ProductImageAudit({products,categories,onEdit,onCreateCategory,onCreateFamily}:{
+export function ProductImageAudit({products,categories,onEdit,onCreateCategory,onCreateFamily,onCreateSku}:{
   products:Product[];
   categories:FamilyCategory[];
   onEdit:(familyCode:string,file:string,skuCode?:string,imageUrl?:string,imageTitle?:string)=>void;
   onCreateCategory:()=>void;
   onCreateFamily:(file:string,category:string,subcategory:string,imageUrl?:string,imageTitle?:string)=>void;
+  onCreateSku:(familyCode:string,file:string,imageUrl?:string,imageTitle?:string)=>void;
 }) {
   const [query,setQuery]=useState('');const [status,setStatus]=useState('all');const [page,setPage]=useState(0);
   const [selected,setSelected]=useState<string|null>(null);
@@ -114,7 +115,7 @@ export function ProductImageAudit({products,categories,onEdit,onCreateCategory,o
         </div>}
         {selectedUrl&&<label className="block text-xs font-bold text-slate-700">نام یا توضیح تصویر
           <input value={imageTitle} onChange={e=>setImageTitle(e.target.value)} placeholder="مثلاً تصویر نمای جلو" className="w-full mt-2 border rounded-xl p-3"/>
-          <span className="block text-[11px] text-slate-500 mt-1">نام محصول، کد و مشخصات فنی در ویرایشگر کالا تکمیل می‌شوند.</span>
+          <span className="block text-[11px] text-slate-500 mt-1">نام محصول، کد و مشخصات فنی در ویرایشگر کالا تکمیل می‌شوند. برای فایل جدید، ذخیره دائمی در فضای ابری تصاویر باید در تنظیمات سرور فعال باشد؛ پیش‌نمایش فایل در مرورگر به‌تنهایی نگهداری دائمی نیست.</span>
         </label>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-xs font-bold text-slate-700">۱. دسته‌بندی
@@ -139,6 +140,10 @@ export function ProductImageAudit({products,categories,onEdit,onCreateCategory,o
           <button type="button" className="text-xs text-[#C65A16] underline" onClick={()=>{if(selected){onCreateFamily(selected,selectedCategory,selectedSubcategory,selectedUrl,imageTitle);setSelected(null)}}}>+ تعریف خانواده و کالای جدید برای همین تصویر</button>
         </div>
         {currentFamily&&<div className="rounded-xl border border-[#F4D4BE] bg-[#FFF9F5] p-3 space-y-3">
+          <button type="button" onClick={()=>{if(selected&&selectedUrl){onCreateSku(currentFamily.code,selected,selectedUrl,imageTitle);setSelected(null);setSelectedUrl('');setSourceMode('existing')}}}
+            className="rounded-xl border border-[#E06518] text-[#C65A16] bg-white px-3 py-2.5 text-xs font-bold">
+            + تعریف کد کالای جدید و مشخصات فنی در این خانواده
+          </button>
           <strong className="text-xs text-[#55565A]">۴. محل اتصال تصویر</strong>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <label className="flex gap-2 items-center rounded-xl bg-white border p-3 text-xs"><input type="radio" name="attach-place" checked={location==='family'} onChange={()=>{setLocation('family');setSelectedSku('')}}/> تصویر عمومی خانواده</label>
