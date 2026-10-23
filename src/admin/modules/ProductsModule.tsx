@@ -813,29 +813,29 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
         products={products}
         categories={categories}
         onCreateCategory={()=>handleOpenCategoryModal()}
-        onCreateFamily={(file,category,subcategory)=>{
+        onCreateFamily={(file,category,subcategory,imageUrl)=>{
           handleOpenNewFamily();
           setDraftFamily(previous=>previous?{
             ...previous,
             categoryName:category||previous.categoryName,
             categorySlug:category?category.replace(/\\s+/g,'-'):previous.categorySlug,
             subcategory:subcategory||previous.subcategory,
-            images:[...(previous.images||[]),getProductImageUrl(file)],
+            images:[...(previous.images||[]),imageUrl||getProductImageUrl(file)],
             galleryImages:[...(previous.galleryImages||[]),{
-              id:`review-new-${file}`,url:getProductImageUrl(file),fileName:file,scope:'family',
+              id:`review-new-${file}`,url:imageUrl||getProductImageUrl(file),fileName:file,scope:'family',
               identityVerified:false,title:'تصویر نیازمند تطبیق با مشخصات کالا',order:1
             }]
           }:previous);
           setEditorTab('family');
         }}
-        onEdit={(code,file,skuCode)=>{
+        onEdit={(code,file,skuCode,imageUrl)=>{
           const product=products.find(p=>p.code===code);if(!product)return;
           handleOpenEditFamily(product,skuCode?'variants':'images');
           if(skuCode)setEditingVariantCode(skuCode);
           setDraftFamily(previous=>{
             if(!previous)return previous;
             const gallery=previous.galleryImages||[];
-            const url=getProductImageUrl(file);
+            const url=imageUrl||getProductImageUrl(file);
             if(gallery.some(image=>image.url===url))return previous;
             return {...previous,galleryImages:[...gallery,{
               id:`review-${file}`,url,fileName:file,
