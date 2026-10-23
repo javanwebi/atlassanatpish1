@@ -6,13 +6,46 @@ import { ProductImage } from '../../components/product/ProductImage';
 import { normalizeCatalogueText } from '../../data/userProducts';
 import { Modal } from '../../components/ui/Modal';
 
-export function ProductImageAudit({products,onEdit}:{products:Product[];onEdit:(familyCode:string,file:string)=>void}) {
+type FamilyCategory={name:string;subcategories?:string[]};
+export function ProductImageAudit({products,categories,onEdit,onCreateCategory,onCreateFamily}:{
+  products:Product[];
+  categories:FamilyCategory[];
+  onEdit:(familyCode:string,file:string,skuCode?:string)=>void;
+  onCreateCategory:()=>void;
+  onCreateFamily:(file:string,category:string,subcategory:string)=>void;
+}) {
   const [query,setQuery]=useState('');const [status,setStatus]=useState('all');const [page,setPage]=useState(0);
-  const [selected,setSelected]=useState<string|null>(null);const [familyQuery,setFamilyQuery]=useState('');
+  const [selected,setSelected]=useState<string|null>(null);
+  const [familyQuery,setFamilyQuery]=useState('');
+  const [selectedCategory,setSelectedCategory]=useState('');
+  const [selectedSubcategory,setSelectedSubcategory]=useState('');
+  const [selectedFamily,setSelectedFamily]=useState('');
+  const [selectedSku,setSelectedSku]=useState('');
+  const [location,setLocation]=useState<'family'|'sku'>('family');
   const audit=useMemo(()=>getImageAssignmentAudit(products),[products]);
   const filtered=useMemo(()=>audit.filter(row=>(status==='all'||row.status===status||(status==='catalogue-photo'&&!!row.ownerCatalogue))&&normalizeCatalogueText([row.file,row.observed,row.research?.visualType,row.research?.visibleFeatures,row.ownerCatalogue?.catalogueGroup,...row.families.flatMap(f=>[f.code,f.name,...f.skus.flatMap(v=>[v.code,v.name])])].join(' ')).includes(normalizeCatalogueText(query))),[audit,query,status]);
   const pageCount=Math.max(1,Math.ceil(filtered.length/24));const activePage=Math.min(page,pageCount-1);
-  const families=products.filter(p=>normalizeCatalogueText(p.code+' '+p.name+' '+(p.variants||[]).map(v=>v.code+' '+v.name).join(' ')).includes(normalizeCatalogueText(familyQuery))).slice(0,30);
+  const families=products.filter(p=>
+    (!selectedCategory||p.categoryName===selectedCategory)
+    &&(!selectedSubcategory||p.subcategory===selectedSubcategory)
+    &&normalizeCatalogueText(p.code+' '+p.name+' '+(p.variants||[]).map(v=>v.code+' '+v.name).join(' ')).includes(normalizeCatalogueText(familyQuery))
+  ).slice(0,80);
+  const currentFamily=products.find(p=>p.code===selectedFamily);
+  const categoryOptions=Array.from(new Set([...categories.map(c=>c.name),...products.map(p=>p.categoryName)].filter(Boolean))).sort((a,b)=>a.localeCompare(b,'fa'));
+  const subcategoryOptions=Array.from(new Set([
+    ...(categories.find(c=>c.name===selectedCategory)?.subcategories||[]),
+    ...products.filter(p=>p.categoryName===selectedCategory).map(p=>p.subcategory||'')
+  ].filter(Boolean))).sort((a,b)=>a.localeCompare(b,'fa'));
+  const chooseImage=(file:string)=>{
+    setSelected(file);setFamilyQuery('');setSelectedCategory('');setSelectedSubcategory('');
+    setSelectedFamily('');setSelectedSku('');setLocation('family');
+  };
+  const openEditor=()=>{
+    if(!selectedFamily||!selected)return;
+    if(location==='sku'&&!selectedSku)return;
+    onEdit(selectedFamily,selected,location==='sku'?selectedSku:undefined);
+    setSelected(null);
+  };
   const download=()=>{
     const url=URL.createObjectURL(new Blob([JSON.stringify(audit,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='sanatpish-image-assignments.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
@@ -31,9 +64,55 @@ export function ProductImageAudit({products,onEdit}:{products:Product[];onEdit:(
       {row.families.map(f=><div key={f.code} className="rounded-lg bg-slate-50 p-2 leading-6"><p>خانواده: {f.name} ({f.code})</p><p>{f.category}</p>{f.skus.length ? f.skus.map(v=><p key={v.code}>کد متصل‌شده: {v.code} — {v.name}</p>) : <p>نمونهٔ خانواده؛ {f.candidateSkuCount.toLocaleString('fa-IR')} کد احتمالی، بدون کد تأییدشده</p>}</div>)}
       {!row.families.length&&<p className="text-amber-700">خانواده و کد هنوز تأیید نشده است</p>}
       {!!row.duplicateFiles.length&&<p>فایل تکراریِ یکسان: {row.duplicateFiles.join('، ')}</p>}
-      <button type="button" onClick={()=>{setSelected(row.file);setFamilyQuery(row.families[0]?.name||'')}} className="rounded-lg border px-3 py-2 font-bold text-[#E06518]">بررسی و اتصال به خانواده / کد</button>
+      <button type="button" onClick={()=>chooseImage(row.file)} className="rounded-lg border px-3 py-2 font-bold text-[#E06518]">بررسی و اتصال به خانواده / کد</button>
     </article>)}</div>
     <div className="flex gap-3 items-center text-xs"><button type="button" disabled={activePage===0} onClick={()=>setPage(activePage-1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">قبلی</button><span>{activePage+1} / {pageCount} — {filtered.length.toLocaleString('fa-IR')} تصویر</span><button type="button" disabled={activePage===pageCount-1} onClick={()=>setPage(activePage+1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">بعدی</button></div>
-    <Modal isOpen={!!selected} onClose={()=>setSelected(null)} title="انتخاب خانواده برای بررسی تصویر"><div className="space-y-3"><p className="text-xs leading-6">پس از انتخاب خانواده، تصویر به پیش‌نویس ویرایشگر اضافه می‌شود. کد دقیق را با مدرک تعیین کنید و سپس ذخیره کنید.</p><input aria-label="جستجوی خانواده برای تصویر" value={familyQuery} onChange={e=>setFamilyQuery(e.target.value)} className="w-full rounded-xl border p-3" placeholder="نام خانواده یا کد کالا" />{families.map(f=><button type="button" key={f.code} onClick={()=>{if(selected)onEdit(f.code,selected);setSelected(null)}} className="block w-full rounded-xl border p-3 text-right text-xs">{f.name} — {f.code}</button>)}</div></Modal>
+    <Modal isOpen={!!selected} onClose={()=>setSelected(null)} title="بررسی و اتصال تصویر به کالا">
+      <div className="space-y-4 max-h-[78vh] overflow-y-auto p-1" dir="rtl">
+        <div className="flex gap-3 items-center rounded-xl bg-[#FAFAFB] border p-3">
+          {selected&&<ProductImage src={getProductImageUrl(selected)} alt={selected} className="w-20 h-20 rounded-xl object-contain bg-white shrink-0"/>}
+          <div className="min-w-0"><b className="text-sm text-[#55565A]">این تصویر متعلق به کجاست؟</b><p className="text-xs text-slate-500 mt-1" dir="ltr">{selected}</p><p className="text-[11px] text-amber-700 mt-1">پیشنهادها تأیید هویت فنی نیستند؛ شما محل و کد نهایی را تعیین می‌کنید.</p></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="text-xs font-bold text-slate-700">۱. دسته‌بندی
+            <select value={selectedCategory} onChange={e=>{setSelectedCategory(e.target.value);setSelectedSubcategory('');setSelectedFamily('');setSelectedSku('')}} className="mt-1.5 w-full p-3 rounded-xl border bg-white">
+              <option value="">همه دسته‌بندی‌ها</option>{categoryOptions.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-bold text-slate-700">۲. زیردسته
+            <select disabled={!selectedCategory} value={selectedSubcategory} onChange={e=>{setSelectedSubcategory(e.target.value);setSelectedFamily('');setSelectedSku('')}} className="mt-1.5 w-full p-3 rounded-xl border bg-white disabled:opacity-50">
+              <option value="">همه زیردسته‌ها</option>{subcategoryOptions.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+        </div>
+        <button type="button" className="text-xs text-[#C65A16] underline" onClick={()=>{setSelected(null);onCreateCategory()}}>+ افزودن دسته‌بندی یا زیردسته جدید</button>
+        <div className="space-y-2">
+          <label className="block text-xs font-bold text-slate-700">۳. خانواده کالا</label>
+          <input value={familyQuery} onChange={e=>setFamilyQuery(e.target.value)} placeholder="جستجوی نام خانواده، کد خانواده یا SKU" className="w-full border rounded-xl p-3 text-sm"/>
+          <select aria-label="انتخاب خانواده" size={Math.min(5,Math.max(2,families.length+1))} value={selectedFamily} onChange={e=>{setSelectedFamily(e.target.value);setSelectedSku('')}} className="w-full p-2 border rounded-xl bg-white text-xs">
+            <option value="">خانواده را انتخاب کنید...</option>
+            {families.map(f=><option key={f.code} value={f.code}>{f.name} — {f.code}</option>)}
+          </select>
+          <button type="button" className="text-xs text-[#C65A16] underline" onClick={()=>{if(selected){onCreateFamily(selected,selectedCategory,selectedSubcategory);setSelected(null)}}}>+ تعریف خانواده و کالای جدید برای همین تصویر</button>
+        </div>
+        {currentFamily&&<div className="rounded-xl border border-[#F4D4BE] bg-[#FFF9F5] p-3 space-y-3">
+          <strong className="text-xs text-[#55565A]">۴. محل اتصال تصویر</strong>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className="flex gap-2 items-center rounded-xl bg-white border p-3 text-xs"><input type="radio" name="attach-place" checked={location==='family'} onChange={()=>{setLocation('family');setSelectedSku('')}}/> تصویر عمومی خانواده</label>
+            <label className="flex gap-2 items-center rounded-xl bg-white border p-3 text-xs"><input type="radio" name="attach-place" checked={location==='sku'} onChange={()=>setLocation('sku')}/> تصویر مخصوص یک کد کالا</label>
+          </div>
+          {location==='sku'&&<label className="block text-xs font-bold text-slate-700">کد کالای دقیق
+            <select value={selectedSku} onChange={e=>setSelectedSku(e.target.value)} className="mt-1.5 w-full border rounded-xl p-3 bg-white">
+              <option value="">انتخاب کد کالا الزامی است</option>{(currentFamily.variants||[]).map(v=><option value={v.code} key={v.code}>{v.code} — {v.name}</option>)}
+            </select>
+          </label>}
+          <p className="text-[11px] text-slate-600">برای افزودن کد جدید، تغییر نام، سایز، مشخصات فنی و سایر اطلاعات، وارد ویرایشگر خانواده شوید. تصویر در پیش‌نویس قرار می‌گیرد و فقط پس از ذخیره نهایی ثبت می‌شود.</p>
+        </div>}
+        <div className="sticky bottom-0 bg-white border-t pt-3 flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={()=>setSelected(null)} className="border rounded-xl px-4 py-2.5 text-xs">انصراف</button>
+          <button type="button" onClick={openEditor} disabled={!selectedFamily||(location==='sku'&&!selectedSku)} className="bg-[#E06518] text-white rounded-xl px-5 py-2.5 text-xs font-bold disabled:opacity-50">ادامه در ویرایشگر و بررسی مشخصات</button>
+        </div>
+      </div>
+    </Modal>
   </details>;
 }
