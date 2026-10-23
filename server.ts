@@ -16,7 +16,6 @@ import { lookup } from 'node:dns/promises';
 import { buildCatalogImageCorpus, corpusFingerprint, officialImageFile, installCatalogImageMetadata } from './src/services/catalogImageCorpus';
 import { scanEveryCatalogImage, type ScanProgress } from './src/services/exhaustiveImageScan';
 import { RecognitionJobs } from './src/services/recognitionJobs';
-import inventorySource from './src/data/catalogueSource.json';
 import { workerVision } from './src/services/partRecognitionGateway';
 import { recognitionWorkerUrl, recognitionApiKey, recognitionCatalog, finalizeRecognition } from './src/utils/recognitionPolicy';
 import {findCatalogKnowledge,catalogFallback} from './src/utils/catalogKnowledge';
@@ -571,7 +570,7 @@ interface CatalogItem {
 // Load real inventory identifiers, never the synthetic legacy summary.
 let CATALOG_ITEMS: CatalogItem[] = [];
 
-const inventoryCodes=new Set<string>(databaseEnabled()?[]:inventorySource.flatMap(family=>family.variants.map(v=>v.code)));
+const inventoryCodes=new Set<string>();
 function recognitionProducts() {
   const overrides=loadCatalogOverridesDb();
   const deleted=new Set(overrides.deletedCodes);
