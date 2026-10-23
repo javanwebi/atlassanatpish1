@@ -826,15 +826,14 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
           <div>
             <h2 className="text-lg font-black text-[#37383b] flex items-center gap-2">
               <Package className="w-5 h-5 text-[#E06518]" />
-              <span>مدیریت دو سطحی خانواده‌های محصول، کدهای کالا، تصاویر و قیمت‌ها</span>
+              <span>کاتالوگ و کالاها</span>
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              کنترل کامل {toPersianDigits(catalogStats.totalFamilies)} خانواده محصول و{' '}
-              {toPersianDigits(catalogStats.totalSkus)} کد کالا؛ اتصال دوطرفهٔ هر تصویر به کد کالا و قیمت‌گذاری مستقل هر کد.
+              خانواده‌های محصول را پیدا کنید، کدها و قیمت‌هایشان را مدیریت کنید و تصاویر را به مورد درست وصل کنید. هیچ اطلاعاتی از کالاها حذف نمی‌شود.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
             <button
               type="button"
               onClick={() => setActiveSubTab('products')}
@@ -844,7 +843,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              خانواده‌ها و کدهای کالا ({toPersianDigits(catalogStats.totalFamilies)})
+              کالاها ({toPersianDigits(catalogStats.totalFamilies)})
             </button>
             <button
               type="button"
@@ -2089,7 +2088,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                   className="px-4 py-2 rounded-xl bg-[#E06518] hover:bg-[#C95210] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
                 >
                   <Check className="w-4 h-4" />
-                  <span>ذخیره در پایگاه داده سایت</span>
+                  <span>ذخیره تغییرات</span>
                 </button>
                 <button
                   type="button"
@@ -2116,40 +2115,36 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
             )}
 
             {/* 4 Step Tabs inside Editor */}
-            <div className="flex items-center border-b border-slate-200 bg-slate-50 px-4 overflow-x-auto no-scrollbar shrink-0">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 border-b border-slate-200 bg-slate-50 p-3 shrink-0">
               {[
                 {
                   id: 'family',
-                  label: '۱. سطح اول: خانواده محصول و مشخصات مشترک',
+                  label: 'اطلاعات خانواده', description: 'نام، دسته و مشخصات مشترک',
                 },
                 {
                   id: 'variants',
-                  label: `۲. سطح دوم: کدهای کالا، مشخصات و قیمت‌ها (${toPersianDigits(
-                    draftFamily.variants?.length || 0
-                  )} کد)`,
+                  label: 'کدهای کالا و قیمت', description: `${toPersianDigits(draftFamily.variants?.length || 0)} کد کالا`,
                 },
                 {
                   id: 'images',
-                  label: `۳. مدیریت تصاویر و اتصال به کد کالا (${toPersianDigits(
-                    draftFamily.galleryImages?.length || 0
-                  )} تصویر)`,
+                  label: 'تصاویر کالا', description: `${toPersianDigits(draftFamily.galleryImages?.length || 0)} تصویر`,
                 },
                 {
                   id: 'preview',
-                  label: '۴. پیش‌نمایش زنده صفحه مشتری (بررسی دوطرفه)',
+                  label: 'پیش‌نمایش سایت', description: 'بررسی قبل از انتشار',
                 },
               ].map(tab => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setEditorTab(tab.id as any)}
-                  className={`px-4 py-3.5 text-xs font-bold border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                    editorTab === tab.id
-                      ? 'border-[#E06518] text-[#E06518] bg-white'
-                      : 'border-transparent text-slate-600 hover:text-slate-900'
+                  aria-current={editorTab === tab.id ? 'step' : undefined}
+                  className={`min-w-0 rounded-xl border p-3 text-right cursor-pointer transition-colors ${
+                    editorTab === tab.id ? 'border-[#E06518] bg-[#FFF4EB] text-[#B94D0A] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                   }`}
                 >
-                  {tab.label}
+                  <span className="block text-xs font-black">{tab.label}</span>
+                  <span className="block text-[10px] font-medium mt-1 opacity-80">{tab.description}</span>
                 </button>
               ))}
             </div>
@@ -2161,6 +2156,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                  =============================================================== */}
               {editorTab === 'family' && (
                 <div className="space-y-6">
+                  <div className="rounded-xl border border-orange-200 bg-orange-50/60 px-4 py-3 text-xs leading-6 text-[#55565A]"><strong className="block text-sm mb-1">اطلاعات کلی این محصول</strong>نام، دسته، برند و توضیحاتی را وارد کنید که بین همه سایزها و مدل‌های این خانواده مشترک‌اند. برای کد و قیمت هر سایز، بخش «کدهای کالا و قیمت» را باز کنید.</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2397,6 +2393,7 @@ export const ProductsModule: React.FC<ProductsModuleProps> = () => {
                  =============================================================== */}
               {editorTab === 'variants' && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                  <div className="lg:col-span-12 rounded-xl border border-orange-200 bg-orange-50/60 px-4 py-3 text-xs leading-6 text-[#55565A]"><strong>هر کد کالا نماینده یک سایز یا مدل مشخص است.</strong> ابتدا کد را از فهرست انتخاب کنید؛ سپس نام دقیق، مشخصات، قیمت و موجودی همان کد را ویرایش کنید. مشخصات فنی تکمیلی در بخش بازشونده قرار دارد.</div>
                   {/* Left Column: List of SKU Variants in this Family */}
                   <div className="lg:col-span-4 bg-slate-50 rounded-2xl border border-slate-200 p-3.5 space-y-3">
                     <div className="flex items-center justify-between">
