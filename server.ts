@@ -13,7 +13,7 @@ import { CatalogVisualIndex } from './src/services/catalogVisualIndex';
 import { RecognitionServiceError } from './src/services/recognitionErrors';
 import { createVisionImagePublisher, cleanVisionImageLinks, type ImagePublisher } from './src/services/visionImageLinks';
 import { lookup } from 'node:dns/promises';
-import { buildCatalogImageCorpus, corpusFingerprint, officialImageFile } from './src/services/catalogImageCorpus';
+import { buildCatalogImageCorpus, corpusFingerprint, officialImageFile, installCatalogImageMetadata } from './src/services/catalogImageCorpus';
 import { scanEveryCatalogImage, type ScanProgress } from './src/services/exhaustiveImageScan';
 import { RecognitionJobs } from './src/services/recognitionJobs';
 import inventorySource from './src/data/catalogueSource.json';
@@ -6460,6 +6460,12 @@ async function start() {
     await database().query('select revision from app_private.portal_version');
     const products=await readProducts();if(!products.length)throw new Error('Database catalogue is empty; run the reviewed importer first');
     installDatabaseProducts(products);
+    const [imageAudits, ownerPhotos] = await Promise.all([
+      database().query('select file_name,image_url,sha256,observed_description from public.catalog_image_audits order by file_name'),
+      database().query('select file_name,catalogue_group from public.owner_catalogue_photos order by file_name'),
+    ]);
+    if (imageAudits.rows.length === 0) throw new Error('Database image audit corpus is empty; refusing bundled JSON fallback');
+    installCatalogImageMetadata(imageAudits.rows, ownerPhotos.rows);
     const saved=await readDocument(database(),'catalog_overrides/runtime','global','catalog_overrides');
     CATALOG_OVERRIDES_CACHE=saved || {version:1,updatedAt:'',deletedCodes:[],families:{}};
     inventoryCodes.clear();for(const product of products)for(const variant of product.variants || [])inventoryCodes.add(variant.code);
